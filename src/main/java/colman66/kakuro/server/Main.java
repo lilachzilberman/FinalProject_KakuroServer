@@ -9,7 +9,6 @@ public class Main {
       server.serverConfig(builder -> builder.baseDir(BaseDir.find(".ratpack.base.dir")))
         .handlers(chain -> chain.post("solveFromImage", new SolveFromImageHandler())
             .files(f -> f.dir("public").indexFiles("index.html")));
-          
     });
   }
 }
