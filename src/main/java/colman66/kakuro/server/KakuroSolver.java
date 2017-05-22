@@ -58,7 +58,7 @@ public final class KakuroSolver {
                         elems.add(k[i][jf]);
                         if (cellf.isNumber()) {
                             try {
-                                k[i][jf].updateBounds(cellf.asInt(), cellf.asInt(), Cause.valueOf("User specified"));
+                                k[i][jf].updateBounds(cellf.asInt(), cellf.asInt(), Cause.Null);
                             } catch (ContradictionException e) {
 
                             }
@@ -81,7 +81,7 @@ public final class KakuroSolver {
                         elems.add(k[il][j]);
                         if (cellf.isNumber()) {
                             try {
-                                k[il][j].updateBounds(cellf.asInt(), cellf.asInt(), Cause.valueOf("User specified"));
+                                k[il][j].updateBounds(cellf.asInt(), cellf.asInt(), Cause.Null);
                             } catch (ContradictionException e) {
 
                             }
