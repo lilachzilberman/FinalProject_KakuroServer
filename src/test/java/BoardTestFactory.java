@@ -18,7 +18,9 @@ public class BoardTestFactory
             new BoardFileTest("badSolution1"),
             new BoardFileTest("badSolution2"),
             new BoardFileTest("badSolution3"),
-            new BoardFileTest("badSolution4")
+            new BoardFileTest("badSolution4"),
+            new BoardFileTest("badBoard1.AssertionError"),
+            new BoardFileTest("badBoard2.AssertionError")
         };
     }
 }

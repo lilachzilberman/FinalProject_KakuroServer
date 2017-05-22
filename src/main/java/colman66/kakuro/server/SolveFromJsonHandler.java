@@ -11,7 +11,7 @@ public class SolveFromJsonHandler implements Handler {
   public void handle(Context context) throws Exception {
     context.parse(jsonNode()).then(boardJson -> {
       KakuroSolver solver = new KakuroSolver((ArrayNode) boardJson);
-      context.render(json(solver.getSolvedJson()));
+      context.render(json(solver.getResultJson()));
     });
   }
 }

@@ -1,7 +1,7 @@
 package colman66.kakuro.server;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.*;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 
 import org.chocosolver.solver.*;
@@ -10,11 +10,98 @@ import org.chocosolver.solver.exception.ContradictionException;
 import org.chocosolver.solver.variables.IntVar;
 
 import java.util.Vector;
+import java.util.Collection;
+
 public final class KakuroSolver {
     private ArrayNode board;
-    private JsonNode solved;
+    private JsonNode solvedBoard;
+    private Model model;
+    private IntVar[][] vars;
+    private Vector<IntVar> currentSumVars = new Vector<IntVar>();
+    private boolean considerNumberCells = true;
+    private String status;
+    
+    public KakuroSolver(ArrayNode board) {
+        this.board = board;
+        solve();
+        if (!this.solvedBoard.isArray()) {
+            considerNumberCells = false;
+            solve();
+        }
+    }
+    
+    public JsonNode getResultJson() {
+        ObjectNode result = JsonNodeFactory.instance.objectNode();
 
-    private static int numOfCols(ArrayNode board) {
+        result.put("input", board);
+        result.put("solved", solvedBoard);
+        result.put("status", status);
+        
+        return result;
+    }
+
+    public JsonNode getSolvedBoardJson() {
+        return this.solvedBoard;
+    }
+
+    public JsonNode getBoardJson() {
+        return this.board;
+    }
+
+    private void solve() {
+        this.status = "NOT_SOLVED";
+        this.solvedBoard = JsonNodeFactory.instance.nullNode();
+
+        this.model = new Model("Kakuro board");
+        this.vars = model.intVarMatrix("k", numOfRows(), numOfCols(), 1, 9);
+        try {
+            for (int i = 0; i < board.size(); ++i) {
+                ArrayNode row = (ArrayNode) board.get(i);
+                for (int j = 0; j < row.size(); ++j) {
+                    System.out.println("at " + i + " " + j);
+                    JsonNode cell = row.get(j);
+                    int sumRight = beginSum(cell, "right");
+                    if (sumRight > 0) {
+                        for (int jj = j + 1; jj < row.size(); ++jj) {
+                            if (!addCellToModel(i, jj)) break;
+                        }
+                        finishSum(sumRight);
+                    }
+                    int sumDown = beginSum(cell, "down");
+                    if (sumDown > 0) {
+                        for (int ii = i + 1; ii < numOfRows(); ++ii) {
+                            if (!addCellToModel(ii, j)) break;
+                        }
+                        finishSum(sumDown);
+                    }
+                }
+            }
+        }
+        catch (ContradictionException e) {
+            return;
+        }
+        Solver solver = model.getSolver();
+        solver.setSearch(Search.defaultSearch(model));
+        if (!solver.solve()) {
+            return;
+        }
+
+        this.solvedBoard = board.deepCopy();
+        this.status = this.considerNumberCells ? "SOLVED" : "SOLVED_DIFFERENTLY";
+
+        for (int i = 0; i < solvedBoard.size(); ++i) {
+            ArrayNode row = (ArrayNode) solvedBoard.get(i);
+            for (int j = 0; j < row.size(); ++j) {
+                JsonNode cell = row.get(j);
+                if (!cellIsVariable(cell)) {
+                    continue;
+                }
+                row.set(j, JsonNodeFactory.instance.numberNode(vars[i][j].getValue()));
+            }
+        }
+    }
+
+    private int numOfCols() {
         if (board.size() == 0) {
             return 0;
         }
@@ -30,94 +117,47 @@ public final class KakuroSolver {
         return cols;
     }
 
-    private static int numOfRows(ArrayNode board) {
+    private int numOfRows() {
         return board.size();
     }
 
-    public KakuroSolver(ArrayNode board) {
-        this.board = board;
+    private boolean cellIsVariable(JsonNode cell) {
+        return !(cell.isObject() || cell.isTextual());
+    }
 
-        this.solved = board.deepCopy();
-
-        Model model = new Model("Kakuro board");
-        IntVar[][] k = model.intVarMatrix("k", numOfRows(board), numOfCols(board), 1, 9);
-        for (int i = 0; i < board.size(); ++i) {
-            ArrayNode row = (ArrayNode) board.get(i);
-            for (int j = 0; j < row.size(); ++j) {
-                JsonNode cell = row.get(j);
-                if (!cell.isObject()) {
-                    continue;
-                }
-                int sumRight = cell.has("right") ? cell.get("right").asInt(0) : 0;
-                if (sumRight > 0) {
-                    Vector<IntVar> elems = new Vector<IntVar>();
-                    IntVar[] elemArray = new IntVar[0];
-                    for (int jf = j + 1; jf < row.size(); ++jf) {
-                        JsonNode cellf = row.get(jf);
-                        if (cellf.isObject() || cellf.isTextual()) break;
-                        elems.add(k[i][jf]);
-                        if (cellf.isNumber()) {
-                            try {
-                                k[i][jf].updateBounds(cellf.asInt(), cellf.asInt(), Cause.Null);
-                            } catch (ContradictionException e) {
-
-                            }
-                        }
-                    }
-                    elemArray = elems.toArray(elemArray);
-                    if (elemArray.length > 0) {
-                        model.sum(elemArray.clone(), "=", sumRight).post();
-                        model.allDifferent(elemArray.clone()).post();
-                    }
-                }
-                int sumDown = cell.has("down") ? cell.get("down").asInt(0) : 0;
-                if (sumDown > 0) {
-                    Vector<IntVar> elems = new Vector<IntVar>();
-                    IntVar[] elemArray = new IntVar[0];
-                    
-                    for (int il = i + 1; il < numOfRows(board); ++il) {
-                        JsonNode cellf = ((ArrayNode) board.get(il)).get(j);
-                        if (cellf.isObject() || cellf.isTextual()) break;
-                        elems.add(k[il][j]);
-                        if (cellf.isNumber()) {
-                            try {
-                                k[il][j].updateBounds(cellf.asInt(), cellf.asInt(), Cause.Null);
-                            } catch (ContradictionException e) {
-
-                            }
-                        }
-                    }
-                    elemArray = elems.toArray(elemArray);
-                    if (elemArray.length > 0) {
-                        model.sum(elemArray.clone(), "=", sumDown).post();
-                        model.allDifferent(elemArray.clone()).post();
-                    }
-                }
+    private boolean addCellToModel(int i, int j) throws ContradictionException {
+        System.out.println("addCellToModel " + i + " " + j);
+        JsonNode cell = cell(i, j);
+        if (cellIsVariable(cell)) {
+            currentSumVars.add(vars[i][j]);
+            if (cell.isNumber() && considerNumberCells) {
+                vars[i][j].instantiateTo(cell.asInt(), Cause.Null);
             }
+            return true;
         }
-        Solver solver = model.getSolver();
-        solver.setSearch(Search.defaultSearch(model));
-        if (!solver.solve()) {
-            this.solved = JsonNodeFactory.instance.textNode("NOT SOLVED");
-            return;
-        }
-        for (int i = 0; i < solved.size(); ++i) {
-            ArrayNode row = (ArrayNode) solved.get(i);
-            for (int j = 0; j < row.size(); ++j) {
-                JsonNode cell = row.get(j);
-                if (!cell.isNull()) {
-                    continue;
-                }
-                row.set(j, JsonNodeFactory.instance.numberNode(k[i][j].getValue()));
-            }
-        }
+        return false;
     }
     
-    public JsonNode getSolvedJson() {
-        return this.solved;
+    private JsonNode cell(int i, int j) {
+        return ((ArrayNode) board.get(i)).get(j);
     }
 
-    public JsonNode getBoardJson() {
-        return this.board;
+    private int beginSum(JsonNode cell, String key) {
+        currentSumVars.clear();
+        if (!cell.isObject()) {
+            return 0;
+        }
+        return cell.has(key) ? cell.get(key).asInt(0) : 0;
+    }
+
+    private void finishSum(int sum) {
+        IntVar[] elemArray = new IntVar[0];
+        elemArray = currentSumVars.toArray(elemArray);
+        if (elemArray.length > 0) {
+            System.out.println(elemArray.length);
+            model.sum(elemArray.clone(), "=", sum).post();
+            model.allDifferent(elemArray.clone()).post();
+        }
+        currentSumVars.clear();
     }
 }

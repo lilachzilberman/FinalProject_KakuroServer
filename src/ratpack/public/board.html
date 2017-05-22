@@ -13,7 +13,11 @@
     [{"right": 6}, null, null, null, "X", {"right": 3}, null, null]
 ]
 </textarea>
-<div id="output">
+<div id="outputContainer">
+    <div id="output">
+    </div>
+    <div id="outputSolved">
+    </div>
 </div>
 <script type="text/javascript">
 var $ = document.querySelector.bind(document);
@@ -21,23 +25,53 @@ var $$ = document.querySelectorAll.bind(document);
 $("#input").addEventListener("change", handleInput);
 $("#input").addEventListener("keyup", handleInput);
 
-updateBoardFromJson($("#input").value);
+updateAndSolve($("#input").value);
 function handleInput(event) {
-    updateBoardFromJson(event.target.value);
+    updateAndSolve(event.target.value);
 }
-function updateBoardFromJson(boardJson) {
+
+function updateAndSolve(boardJson) {
+    updateBoardFromJson(boardJson);
+    const handleError = e => $("#outputSolved").innerHTML = `<div class="error">${e.stack || e}</div>`;
+    fetch("./solveFromJson", {method: "POST", body: boardJson, headers: {"content-type": "application/json"}})
+        .then(res => {
+            if (res.status >= 400 && res.status < 600) {
+                res.text().then(text =>  {
+                    handleError(res.statusText + "\r\n" + text);
+                });
+                return;
+            }
+            return res.json();
+        })
+        .then(result => {
+            if (result) {
+                updateBoardFromJson(JSON.stringify(result.solved || result.status), "#outputSolved");
+                if (result.status === "SOLVED_DIFFERENTLY") {
+                    $("#outputSolved").classList.add("status--solved-differently");
+                } else {
+                    $("#outputSolved").classList.remove("status--solved-differently");
+                }
+            }
+        })
+        .catch(handleError);
+}
+function updateBoardFromJson(boardJson, outputSelector = "#output") {
     try {
-        $("#output").innerHTML = renderBoard(JSON.parse(boardJson));
+        $(outputSelector).innerHTML = renderBoard(JSON.parse(boardJson));
     } catch (e) {
-        $("#output").innerHTML = `<div class="error">${e.stack || e}</div>`
+        $(outputSelector).innerHTML = `<div class="error">${e.stack || e}</div>`
     }
 }
 function renderBoard(boardRows) {
-    return `
-        <table class="board">
-            ${boardRows.map(renderBoardRow).join("")}
-        </table>
-    `;
+    if (Array.isArray(boardRows)) {
+        return `
+            <table class="board">
+                ${boardRows.map(renderBoardRow).join("")}
+            </table>
+        `;
+    } else {
+        return boardRows;
+    }
 }
 function renderBoardRow(rowCells) {
     return `

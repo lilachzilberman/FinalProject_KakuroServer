@@ -35,9 +35,18 @@ public final class BoardFileTest implements ITest
     @Test
     public void boardTest() throws JsonProcessingException, IOException {
         URL inputFileUrl = this.getClass().getResource(this.basename + ".json");
-        JsonNode input = mapper.readTree(inputFileUrl);
-        KakuroSolver solver = new KakuroSolver((ArrayNode) input);
-        JsonNode output = solver.getSolvedJson();
+        JsonNode input, output;
+        KakuroSolver solver;
+        try {
+            input = mapper.readTree(inputFileUrl);
+            solver = new KakuroSolver((ArrayNode) input);
+            output = solver.getResultJson();
+        } catch (Throwable e) {
+            if (this.basename.endsWith("." + e.getClass().getSimpleName())) {
+                return;
+            }
+            throw e;
+        }
         URL snapshotFileUrl = this.getClass().getResource(this.basename + ".output.json");
         if (snapshotFileUrl == null) {
             Path inputPath = urlToFile(inputFileUrl).toPath();
@@ -52,12 +61,12 @@ public final class BoardFileTest implements ITest
                 .resolve("resources")
                 .resolve(this.basename + ".output.json")
                 .toFile();
-            System.out.println(outputFile);
             outputFile.createNewFile();
             mapper.enable(SerializationFeature.INDENT_OUTPUT)
                 .writeValue(outputFile, output);
         } else {
-            assertEquals(output, mapper.readTree(snapshotFileUrl));
+            JsonNode expected = mapper.readTree(snapshotFileUrl);
+            assert(expected.equals(output));
         }
     }
 }
