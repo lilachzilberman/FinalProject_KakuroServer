@@ -58,7 +58,6 @@ public final class KakuroSolver {
             for (int i = 0; i < board.size(); ++i) {
                 ArrayNode row = (ArrayNode) board.get(i);
                 for (int j = 0; j < row.size(); ++j) {
-                    System.out.println("at " + i + " " + j);
                     JsonNode cell = row.get(j);
                     int sumRight = beginSum(cell, "right");
                     if (sumRight > 0) {
@@ -126,7 +125,6 @@ public final class KakuroSolver {
     }
 
     private boolean addCellToModel(int i, int j) throws ContradictionException {
-        System.out.println("addCellToModel " + i + " " + j);
         JsonNode cell = cell(i, j);
         if (cellIsVariable(cell)) {
             currentSumVars.add(vars[i][j]);
@@ -154,7 +152,6 @@ public final class KakuroSolver {
         IntVar[] elemArray = new IntVar[0];
         elemArray = currentSumVars.toArray(elemArray);
         if (elemArray.length > 0) {
-            System.out.println(elemArray.length);
             model.sum(elemArray.clone(), "=", sum).post();
             model.allDifferent(elemArray.clone()).post();
         }
