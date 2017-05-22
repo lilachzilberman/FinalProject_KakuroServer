@@ -31,3 +31,18 @@ dependencies {
 }
 
 mainClassName = "colman66.kakuro.server.Main"
+
+test {
+  // enable TestNG support (default is JUnit)
+  useTestNG()
+
+  // listen to standard out and standard error of the test JVM(s)
+  onOutput { descriptor, event ->
+     logger.lifecycle(descriptor.toString() + ": " + event.message )
+  }
+
+  dependencies {
+    // https://mvnrepository.com/artifact/org.testng/testng
+    compile group: 'org.testng', name: 'testng', version: '6.11'
+  }
+}
