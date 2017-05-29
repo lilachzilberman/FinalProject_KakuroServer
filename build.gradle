@@ -2,10 +2,18 @@ buildscript {
   repositories {
     jcenter()
   }
+  dependencies {
+    classpath 'org.akhikhl.gretty:gretty:+'
+  }
 }
 
-apply plugin: "idea"
-apply plugin: "application"
+apply plugin: 'application'
+apply plugin: 'war'
+apply plugin: 'org.akhikhl.gretty'
+
+gretty { 
+  servletContainer = 'tomcat8'
+}
 
 repositories {
   jcenter()
