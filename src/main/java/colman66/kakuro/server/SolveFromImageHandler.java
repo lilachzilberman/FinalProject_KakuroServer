@@ -1,37 +1,55 @@
 package colman66.kakuro.server;
 
-import ratpack.handling.Handler;
-import ratpack.handling.Context;
-import ratpack.form.Form;
-import ratpack.form.UploadedFile;
-import com.fasterxml.jackson.databind.JsonNode;
-import colman66.kakuro.server.KakuroSolver;
 import com.fasterxml.jackson.core.*;
 import com.fasterxml.jackson.databind.*;
-import java.io.IOException;
+import com.fasterxml.jackson.databind.node.*;
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import javax.servlet.http.HttpServletRequest;
+import org.apache.commons.fileupload.*;
+import org.apache.commons.fileupload.disk.*;
+import org.apache.commons.fileupload.servlet.*;
+import org.apache.commons.io.*;
+import spark.*;
 
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import static ratpack.jackson.Jackson.json;
+public class SolveFromImageHandler implements Route {
+  final ObjectMapper mapper = new ObjectMapper();
 
-public class SolveFromImageHandler implements Handler {
-  ObjectMapper mapper = new ObjectMapper();
+  ServletFileUpload uploadParser;
 
-  public void handle(Context context) throws Exception {
-      context.parse(Form.class).then(form -> {
-      UploadedFile image = form.file("image");
-      if (image == null || image.getBytes().length == 0) {
-        context.getResponse().status(400)
-            .send("Expected a POST form with enctype=\"multipart/form-data\" and a non-empty file with the key \"image\".");
-        return;
-      }
-      
-      JsonNode board = getBoardFromImage(image);
-      KakuroSolver solver = new KakuroSolver((ArrayNode) board);
-      context.render(json(solver.getResultJson()));
+  public SolveFromImageHandler() throws IOException {
+    DiskFileItemFactory factory = new DiskFileItemFactory();
+    File uploadDir = Files.createTempDirectory(null).toFile();
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+        public void run() {
+          try {
+            FileUtils.deleteDirectory(uploadDir);
+          } catch (IOException e) {}
+        }
     });
+    factory.setRepository(uploadDir);
+    uploadParser = new ServletFileUpload(factory);
   }
 
-  private JsonNode getBoardFromImage(UploadedFile image) throws JsonProcessingException, IOException
+  public Object handle(Request request, Response response) throws Exception {
+    HttpServletRequest raw = request.raw();
+    List<FileItem> items = uploadParser.parseRequest(raw);
+      
+    FileItem image = items.stream().filter(p -> p.getFieldName().equals("image")).findAny().orElse(null);
+
+    if (image == null || image.getSize() == 0) {
+      response.status(400);
+      return "Expected a POST form with enctype=\"multipart/form-data\" and a non-empty file with the key \"image\".";
+    }
+    
+    JsonNode board = getBoardFromImage(image);
+    KakuroSolver solver = new KakuroSolver((ArrayNode) board);
+    response.type("application/json");
+    return mapper.writeValueAsString(solver.getResultJson());
+  }
+
+  private JsonNode getBoardFromImage(FileItem image) throws JsonProcessingException, IOException
   {
     // TODO: call python code
     String dummyBoardJson =

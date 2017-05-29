@@ -1,17 +1,21 @@
 package colman66.kakuro.server;
 
-import ratpack.handling.Handler;
-import ratpack.handling.Context;
-import static ratpack.jackson.Jackson.jsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
+import spark.*;
+import com.fasterxml.jackson.databind.node.*;
+import com.fasterxml.jackson.databind.*;
 
-import static ratpack.jackson.Jackson.json;
 
-public class SolveFromJsonHandler implements Handler {
-  public void handle(Context context) throws Exception {
-    context.parse(jsonNode()).then(boardJson -> {
-      KakuroSolver solver = new KakuroSolver((ArrayNode) boardJson);
-      context.render(json(solver.getResultJson()));
-    });
+public class SolveFromJsonHandler implements Route {
+  final ObjectMapper mapper = new ObjectMapper();
+
+  public Object handle(Request request, Response response) throws Exception {
+    if (!request.contentType().equals("application/json")) {
+      response.status(400);
+      return "Expected JSON input";
+    }
+    JsonNode boardJson = mapper.readTree(request.body());
+    KakuroSolver solver = new KakuroSolver((ArrayNode) boardJson);
+    response.type("application/json");
+    return mapper.writeValueAsString(solver.getResultJson());
   }
 }
