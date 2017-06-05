@@ -19,8 +19,9 @@ textarea#input {
 
 .board {
     display: inline-table;
-    border: 1px solid black;
+    border: 2px solid black;
     border-collapse: collapse;
+    font-size: 15px;
 }
 
 .status--solved-differently .board, .status--solved-differently .board .cell {
@@ -32,7 +33,7 @@ textarea#input {
     padding: 0;
     width: 40px;
     height: 40px;
-    border: 1px solid gray;
+    border: 3px solid gray;
     border-collapse: collapse;
 }
 
@@ -51,7 +52,7 @@ textarea#input {
 .cell--split::after {
     content: "";
     position: absolute;
-    border: 0.5px solid darkgray;
+    border: 2px solid gray;
     height: 140%;
     transform: rotate(-45deg);
     transform-origin: 0% 0%; 
@@ -61,12 +62,12 @@ textarea#input {
     position: absolute;
 }
 .sum__down {
-    bottom: 5%;
-    left: 5%;
+    bottom: 3%;
+    left: 3%;
 }
 .sum__right {
-    right: 5%;
-    top: 5%; 
+    right: 3%;
+    top: 3%; 
 }
 .error {
     white-space: pre;
