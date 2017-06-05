@@ -1,0 +1,2 @@
+model_checkpoint_path: "/home/alon/PycharmProjects/finalProject/model/my-model"
+all_model_checkpoint_paths: "/home/alon/PycharmProjects/finalProject/model/my-model"
