@@ -22,35 +22,38 @@ public class SolveFromImageHandler implements Route {
     DiskFileItemFactory factory = new DiskFileItemFactory();
     File uploadDir = Files.createTempDirectory(null).toFile();
     Runtime.getRuntime().addShutdownHook(new Thread() {
-        public void run() {
-          try {
-            FileUtils.deleteDirectory(uploadDir);
-          } catch (IOException e) {}
+      public void run() {
+        try {
+          FileUtils.deleteDirectory(uploadDir);
+        } catch (IOException e) {
         }
+      }
     });
     factory.setRepository(uploadDir);
     uploadParser = new ServletFileUpload(factory);
   }
 
   public Object handle(Request request, Response response) throws Exception {
+    boolean useInternalFormat = "internal".equals(request.queryParams("format"));
     HttpServletRequest raw = request.raw();
     List<FileItem> items = uploadParser.parseRequest(raw);
-      
+
     FileItem image = items.stream().filter(p -> p.getFieldName().equals("image")).findAny().orElse(null);
 
     if (image == null || image.getSize() == 0) {
       response.status(400);
       return "Expected a POST form with enctype=\"multipart/form-data\" and a non-empty file with the key \"image\".";
     }
-    
-    JsonNode board = getBoardFromImage(image);
+
+    JsonNode board = ImageProcessing.getBoardFromImage(image);
     KakuroSolver solver = new KakuroSolver((ArrayNode) board);
     response.type("application/json");
-    return mapper.writeValueAsString(solver.getResultJson());
-  }
 
-  private JsonNode getBoardFromImage(FileItem image) throws JsonProcessingException, IOException
-  {
-    return ImageProcessing.getBoardFromImage(image);
+    if (useInternalFormat)
+    {
+          return mapper.writeValueAsString(solver.getResultJson());
+    }
+
+    return mapper.writeValueAsString(BoardConversions.appFromInternal(solver.getResultJson()));
   }
 }
