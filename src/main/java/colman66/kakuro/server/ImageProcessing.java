@@ -26,7 +26,10 @@ public class ImageProcessing {
 
     ProcessBuilder pb = new ProcessBuilder(pythonBin, pythonScript);
     Process p = pb.start();
-    IOUtils.copy(image.getInputStream(), p.getOutputStream());
+    OutputStream pythonStdin = p.getOutputStream();
+    IOUtils.copy(image.getInputStream(), pythonStdin);
+    pythonStdin.flush();
+    pythonStdin.close();
     return mapper.readTree(p.getInputStream());
   }
 }
