@@ -2,12 +2,11 @@ package colman66.kakuro.server;
 
 import com.fasterxml.jackson.core.*;
 import com.fasterxml.jackson.databind.*;
-import com.fasterxml.jackson.databind.node.*;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 import org.apache.commons.fileupload.*;
-import org.apache.commons.io.*;
+import org.apache.commons.io.IOUtils;
 
 public class ImageProcessing {
   final static ObjectMapper mapper = new ObjectMapper();
@@ -27,6 +26,7 @@ public class ImageProcessing {
 
     ProcessBuilder pb = new ProcessBuilder(pythonBin, pythonScript);
     Process p = pb.start();
+    IOUtils.copy(image.getInputStream(), p.getOutputStream());
     return mapper.readTree(p.getInputStream());
   }
 }
