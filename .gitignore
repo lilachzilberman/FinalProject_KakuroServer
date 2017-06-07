@@ -2,3 +2,4 @@
 bin
 build
 *.zip
+python-read-board/**/.idea
