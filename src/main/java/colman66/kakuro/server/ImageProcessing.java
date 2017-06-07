@@ -7,6 +7,7 @@ import java.nio.file.*;
 import java.util.*;
 import org.apache.commons.fileupload.*;
 import org.apache.commons.io.*;
+import org.apache.commons.io.input.*;
 
 public class ImageProcessing {
   final static ObjectMapper mapper = new ObjectMapper();
@@ -41,6 +42,7 @@ public class ImageProcessing {
     }
     try {
       ProcessBuilder pb = new ProcessBuilder(pythonCmd);
+      pb.redirectError(ProcessBuilder.Redirect.INHERIT);
       System.out.println("Starting python script with:\n\t" + String.join(" ", pythonCmd));
       Process p = pb.start();
       if (!imageViaFile) {
@@ -49,7 +51,8 @@ public class ImageProcessing {
         pythonStdin.flush();
         pythonStdin.close();
       }
-      return mapper.readTree(p.getInputStream());
+      TeeInputStream split = new TeeInputStream(p.getInputStream(), System.out);
+      return mapper.readTree(split);
     } finally {
       if (imageAsFile != null) {
         imageAsFile.deleteOnExit(); // long term cleanup if the delete() call fails or keepImage == true
