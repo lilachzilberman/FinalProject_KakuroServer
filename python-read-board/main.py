@@ -1,49 +1,63 @@
 # -*- coding: utf-8 -*-
-import json
-import sys
-if len(sys.argv) == 1:
-    sys.stdin.read()
-
-print(json.dumps([["X", {"down":3}, {"down":4}, "X", "X", "X", "X", {"down":15}, {"down":3}],[{"right":4}, None, None, {"down":16}, {"down":6}, "X", {"right":3}, None, None],[{"right":10}, None, None, None, None, {"down":14}, {"down":16, "right":7}, None, None],["X", "X", {"down":21, "right":16}, None, None, None, None, None, "X"],["X", {"right":3}, None, None, {"down":3, "right":11}, None, None, None, "X"],["X",{"right":6}, None, None, None, {"down":4, "right":10}, None, None, "X"],["X", {"down":4, "right":19}, None, None, None, None, None, {"down":3}, {"down":4}],[{"right":6}, None, None, "X", {"right":10}, None, None, None, None],[{"right":7}, None, None, "X", "X", "X", {"right":4}, None, None]]))
-exit()
 import cv2
 import numpy as np
 import math
-from datetime import datetime
+import json
+import sys
 
-from mnist.main import run as getDigitFromMNIST
+from mnist.main import run as getDigitsFromMNIST
+from mnist.config import size as sizeToMNIST
 from helpers import getAllContours, getContourCenter, isCenterEqual, isPointInContour, calcDistance, cut_out_sudoku_puzzle, thresholdify, dilate, new_dilate, getAllTriangles, getAllSquares
-from helpers import getContourApprox, getMiddleVertex, getRightVertex, getLeftVertex, getTopLeft, getBottomRight, findContourAndRectOfPoint, getRect
+from helpers import getContourApprox, getMiddleVertex, getRightVertex, getLeftVertex, getTopLeft, getBottomRight, findContourAndRectOfPoint, getRect, threshPost, invertProcess, postForTriangles, threshPostAllSquares
+from helpers import containsAnyContour, containedByOtherContour
 
-from imageHelper import show, drawLine, convertToGray, convertToColor
+from imageHelper import show, drawLine, convertToGray, convertToColor, putDigitInCenter, getColorProps, percentageOfWhitePixels
 SAFETY_PIXEL_WIDTH = 3
 
 def preProcess(image):
     #TODO: delete this line
     image = convertToGray(image)
-    #image = cv2.GaussianBlur(image, (11, 11), 0)
-    image = dilate(image)
 
-    thresh = thresholdify(image)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2)) #TODO: was 2,2
-    image = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+    #image = dilate(image)
+    #show(image)
+
+    image = thresholdify(image)
+    #show(image)
+    image = cv2.GaussianBlur(image, (7, 7), 0)
+    #show(image)
+    #kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2)) #TODO: was 2,2
+    #image = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
+    #image = dilate(thresh)
+    #show(image)
+    return image
+
+def postProcess(image):
+    image = threshPost(image)
+    # dilating
+    #image = new_dilate(image, 3) #TODO: was 7
+    #show(image)
+    #image = thresholdify(image)
+    #show(image)
+    # eroding
+    #kernel = np.ones((3, 3), np.uint8)
+    #image = cv2.erode(image, kernel, iterations=1)
+    #show(image)
+    # blurring
+    #image = cv2.GaussianBlur(image, (5, 5), 15)
+    #show(image)
     return image
 
 def crop(image):
-    contours = getAllContours(image.copy())
+    contours = getAllSquares(getAllContours(image.copy()))
     contour = max(contours, key=cv2.contourArea)
     board = cut_out_sudoku_puzzle(image.copy(), contour)
-    return board
+    rect = getRect(contour)
+    return board, rect
 
-def getBoardFromImage(imageFile):
-    # read the image, blur it
-    # create a structuring element to pass to
-    orig = cv2.imread(imageFile)
+def getBoardFromImage(orig):
     image = preProcess(orig)
-    cropedImage = crop(image)
-    #board = straighten(cropedImage)
-    #show(board)
-    return orig, cropedImage
+    cropedImage, rect = crop(image)
+    return cropedImage, rect
 
 def checkIfFarBiggerThanAreaSize(size, contour):
     # If the contour is bigger than 50% of the board
@@ -52,6 +66,9 @@ def checkIfFarBiggerThanAreaSize(size, contour):
 def checkIfVeryBelowAreaSize(areaSize, contour):
     # If the contour is smaller than 60% of the average size
     return (cv2.contourArea(contour) < (areaSize * 0.6))
+
+def checkIfBlockingCell(maxPixelValue):
+    return maxPixelValue > 151
 
 def getTwinContour(source, contours):
     sourceCenter = getContourCenter(source)
@@ -107,18 +124,31 @@ def drawSquare(image, topLeft, topRight, bottomRight, bottomLeft):
     return image
 
 def convertSemiCellsToCells(image):
-    show(image)
-    contours = getAllContours(image)
+    image = convertToGray(image)
+    image = postForTriangles(image)
+    #TODO: no converting to color
+    if (False):
+        stam = getAllSquares(getAllContours(image))
+        image = convertToColor(image)
+        image = cv2.drawContours(image, stam, -1, (0, 255, 0), 5)
+        show(image)
+
     # getting all triangle contours
-    triangle_contours = getAllTriangles(contours)
+    triangle_contours = getAllTriangles(getAllContours(image))
+
+    if (len(triangle_contours) == 0):
+        return image, triangle_contours
     # filter contours very below the average (noise contour)
     contourAvgSize = sum(cv2.contourArea(item) for item in triangle_contours) / float(len(triangle_contours))
-    #triangle_contours = list(filter(lambda x: not checkIfVeryBelowAreaSize(contourAvgSize, x), triangle_contours))
-    image = convertToColor(image)
-    image = cv2.drawContours(image, triangle_contours, -1, (0, 255, 0), 5)
-    show(image)
-    image = cv2.drawContours(image, triangle_contours, -1, (0, 0, 0), 5)
-    image = convertToGray(image)
+    triangle_contours = list(filter(lambda x: not checkIfVeryBelowAreaSize(contourAvgSize, x), triangle_contours))
+
+    # todo: delete
+    if (False):
+        image = convertToColor(image)
+        image = cv2.drawContours(image, triangle_contours, -1, (0, 255, 0), 5)
+        show(image)
+        image = cv2.drawContours(image, triangle_contours, -1, (0, 0, 0), 5)
+        image = convertToGray(image)
 
     # Converting the triangle contours into squares
     for cnt in triangle_contours:
@@ -182,7 +212,7 @@ def getBoardGrid(boardSize, cnts):
             nextCellPoint = (cX + cellWidth, cY)
             nextCell = findContourAndRectOfPoint(nextCellPoint, zip(cnts, boundingBoxes))
             if nextCell == None:
-                print("can't find the next cell")
+                #print("can't find the next cell")
                 return None
             lineCells.append(nextCell)
             currCell = nextCell
@@ -196,69 +226,59 @@ def getBoardGrid(boardSize, cnts):
             nextCellPoint = (cX, cY + cellHeight)
             leftCellInLine = findContourAndRectOfPoint(nextCellPoint, zip(cnts, boundingBoxes))
             if leftCellInLine == None:
-                print("can't find the next line left cell")
+                #print("can't find the next line left cell")
                 return None
     return gridCells
 
-def getDigit(image):
-    height, width = image.shape[0], image.shape[1]
-    boundSpace = 3
-    smallAxis, bigAxis = min([height, width]), max([height, width])
-    diff = bigAxis - smallAxis
-    if (height > width):
-        minX, maxX = boundSpace + int(diff / 2), boundSpace + int(diff / 2) + smallAxis
-        minY, maxY = boundSpace, boundSpace + bigAxis
-    else:
-        minX, maxX = boundSpace, boundSpace + bigAxis
-        minY, maxY = boundSpace + int(diff / 2), boundSpace + int(diff / 2) + smallAxis
-
-    biggerImage = np.zeros(((boundSpace * 2) + bigAxis, (boundSpace * 2) + bigAxis), dtype=np.uint8)
-    biggerImage[minY:maxY, minX:maxX] = image
-
-    # Thresholding
-    _, biggerImage = cv2.threshold(biggerImage,127,255,cv2.THRESH_TOZERO)
-    # eroding the image
-    kernel = np.ones((5, 5), np.uint8)
-    biggerImage = cv2.erode(biggerImage, kernel, iterations=1)
-
-    value = getDigitFromMNIST(biggerImage)
-    #show(biggerImage, str(value))
-    return value
-
-def handleSquareImage(origImage, image):
+def handleSquareImage(origCroped, image):
+    #TODO: use imageRect
     #TODO: just send to mnist or check the contour and then mnist
+    # TODO: might be more than one digit?
     # counting the percentage of white pixels
-    whitePixels = cv2.countNonZero(image)
-    percentOfWhite = int((whitePixels / (image.shape[0] * image.shape[1])) * 100)
+    percentOfWhite = percentageOfWhitePixels(image)
+    #show(image)
+    #show(origImage)
 
-    if percentOfWhite < 20:
-        return None
+    if percentOfWhite < 10:
+        return { 'hasValue': True, 'data': None }
     else:
-        return getDigit(image)
+        return { 'hasValue': False, 'data': [image] }
 
 alonW = []
 alonH = []
 
-def handleTriangleImage(origImage, image, contour, minX, minY):
-    # since we draw a square outside the triangle, we need to look for it's inner contours
-    digitContours = getAllContours(image)
+def handleTriangleImage(origCroped, image, contour, minX, minY, alon):
+    origGray = convertToGray(origCroped)
+    if (True):
+        # since we draw a square outside the triangle, we need to look for it's inner contours
+        kernel = np.ones((3, 3), np.uint8)
+        #image = cv2.erode(image, kernel, iterations=3)
+        #image = cv2.GaussianBlur(image, (3, 3), 0)
+        #show(image)
+        stam = thresholdify(convertToGray(origCroped))
+        stam = cv2.GaussianBlur(stam, (3, 3), 0)
+        if (alon[0] == 2 and alon[1] == 0):
+            a = 5
+            #show(stam)
+
+    digitContours = getAllContours(stam)
+    # excluding all lines and other contours which are not cell square
+    digitContours = list(filter(lambda x: not containedByOtherContour(x, digitContours), digitContours))
+
     digits = []
-    #show(image)
     for digitContour in digitContours:
         (x, y, w, h) = rect = getRect(digitContour)
 
-        # todo: debug
-        if (False):
-            image = convertToColor(image)
-            cv2.drawContours(image, [digitContour], -1, (255, 0, 0), 5)
-            show(image)
-            cv2.drawContours(image, [digitContour], -1, (0, 0, 0), 5)
-            image = convertToGray(image)
-
         digitHeightInPercent, digitWidthInPercent = h / image.shape[0], w / image.shape[1]
         # not the crossing line of the triangle
-        if ((digitWidthInPercent > 0.13 and digitWidthInPercent < 0.4) and
-            (digitHeightInPercent > 0.25 and digitHeightInPercent < 0.8)):
+        if ((digitWidthInPercent > 0.10 and digitWidthInPercent < 0.4) and
+            (digitHeightInPercent > 0.10 and digitHeightInPercent < 0.7) and
+            (x > 5 and y > 5)):
+            # todo: debug
+            if (alon[0] == 2 and alon[1] == 0):
+                stam1 = convertToColor(stam)
+                cv2.drawContours(stam1, [digitContour], -1, (255, 0, 0), 5)
+                #show(stam1)
             digitCenter = getContourCenter(digitContour)
             # since we croped, we want to test the original image X,Y of the contour
             origDigitCenter = (digitCenter[0] + minX, digitCenter[1] + minY)
@@ -275,21 +295,52 @@ def handleTriangleImage(origImage, image, contour, minX, minY):
 
     # sorting the digits from the left to the right (x axis)
     digits = sorted(digits, key=lambda x: x['rect'][0])
+    # todo: delete imageRect references
+    #(imageX, imageY, w, h) = imageRect
+    safeBorder = 3
+    digitsWithBorder = []
+    for digit in digits:
+        (x, y, w, h) = digit['rect']
+        digitImage = image[y - safeBorder:y + h + safeBorder,
+                     x - safeBorder:x + w + safeBorder]
 
-    if (len(digits) == 0):
-        return None
-    else:
-        value = 0
-        for digit in digits:
-            (x, y, w, h) = digit['rect']
-            digitImage = image[y:y + h, x:x + w]
-            #show(image)
+        if (False):
+            p = cv2.GaussianBlur(digitImage, (7, 7), 0)
+            thresh = cv2.adaptiveThreshold(p.astype(np.uint8), 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                                           cv2.THRESH_BINARY, 11, 10)
+                                            # 3 #TODO: was 11,10 or 11,7 or 5,2
             #show(digitImage)
-            digitValue = getDigit(digitImage)
-            value = (value * 10) + digitValue
-        return value
+            #p = putDigitInCenter(digitImage)
+            #show(p)
+            #value = getDigitsFromMNIST([p])
+            #show(p, str(value[0]))
+        # show(digitImage)
+        # since we croped the digit from the croped image (minY)
+        # since we croped the board from the original image (imageY). same goes for X
+        # digitImage = origImage[y + minY + imageY - safeBorder: y + h + minY + imageY + safeBorder,
+        #                       x + minX + imageX - safeBorder: x + w + minX + imageX + safeBorder]
+        # show(255 - digitImage)
+        # digitImage = convertToGray(255 - digitImage)
 
-def readDigitsFromImage(origImage, image, shapeContour, isSquare):
+        digitImage = putDigitInCenter(digitImage)
+        digitImage = cv2.resize(digitImage, (sizeToMNIST, sizeToMNIST))
+        #show(digitImage)
+        #thresh = cv2.adaptiveThreshold(digitImage.astype(np.uint8), 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                                       #cv2.THRESH_BINARY, 3, 10)
+        #digitImage = cv2.GaussianBlur(digitImage, (7, 7), 0)
+        #digitImage = cv2.blur(digitImage, (3, 3))
+        digitImage = cv2.bilateralFilter(digitImage, 17, 75, 75)
+        #show(digitImage)
+        #show (thresh)
+        #show(digitImage)
+        digitsWithBorder.append(digitImage)
+
+    if (len(digitsWithBorder) == 0):
+        return { 'hasValue': True, 'data': None }
+    else:
+        return { 'hasValue': False, 'data': digitsWithBorder }
+
+def handleDigitsFromImage(origImage, image, shapeContour, isSquare, alon):
     x, y = [], []
     for contour_lines in shapeContour:
         for line in contour_lines:
@@ -298,72 +349,184 @@ def readDigitsFromImage(origImage, image, shapeContour, isSquare):
     minX, minY, maxX, maxY = min(x), min(y), max(x), max(y)
 
     croped = image[minY:maxY, minX:maxX]
+    origCroped = origImage[minY:maxY, minX:maxX]
 
     if (isSquare):
-        return handleSquareImage(origImage, croped)
+        return handleSquareImage(origCroped, croped)
     else:
-        return handleTriangleImage(origImage, croped, shapeContour, minX, minY)
+        return handleTriangleImage(origCroped, croped, shapeContour, minX, minY, alon)
 
-def readCellFromImage(origImage, image, cell, triangles):
+def readCellFromImage(origImage, image, cell, allCells, alon):
+    (regularCells, blockCells, triangles) = allCells
     (contour, rect) = cell
-    cellTriangles = []
+
+    trianglesInCell = []
     for triangle in triangles:
         triangleCenter = getContourCenter(triangle)
         if (isPointInContour(triangleCenter, contour)):
-            cellTriangles.append({ 'contour': triangle, 'center': triangleCenter })
+            trianglesInCell.append({ 'contour': triangle, 'center': triangleCenter })
 
     # native square, no triangles
-    if (len(cellTriangles) == 0):
-        value = readDigitsFromImage(origImage, image, contour, True)
-        return {
-            'valid': True,
-            'cell': {
-                'cellType': 'square',
-                'value': value
-            }
-        }
+    if (len(trianglesInCell) == 0):
 
-    elif (len(cellTriangles) == 2):
-        center1, center2 = cellTriangles[0]['center'], cellTriangles[1]['center']
+        isBlockCell = False
+        for blockCell in blockCells:
+            blockCenter = getContourCenter(blockCell)
+            if (isPointInContour(blockCenter, contour)):
+                isBlockCell = True
+                break
+
+        if (isBlockCell):
+            return {
+                'valid': True,
+                'block': True
+            }
+        else:
+            value = handleDigitsFromImage(origImage, image, contour, True, alon)
+            return {
+                'valid': True,
+                'cell': { 'cellType': 'square', 'value': value }
+            }
+
+    elif (len(trianglesInCell) == 2):
+        center1, center2 = trianglesInCell[0]['center'], trianglesInCell[1]['center']
         # if the triangles are not bottom left and upper right
         if ((center1[0] < center2[0] and center1[1] < center2[1]) or
             (center2[0] < center1[0] and center2[1] < center1[1])):
             return { 'valid': False }
         else:
             if (center1[0] < center2[0] and center1[1] > center2[1]):
-                bottomLeftTriangle = cellTriangles[0]['contour']
-                upperRightTriangle = cellTriangles[1]['contour']
+                bottomLeftTriangle = trianglesInCell[0]['contour']
+                upperRightTriangle = trianglesInCell[1]['contour']
             else:
-                bottomLeftTriangle = cellTriangles[1]['contour']
-                upperRightTriangle = cellTriangles[0]['contour']
-            # TODO: crop and mnist with both triangles and their two digits or one
-            bottomValue = readDigitsFromImage(origImage, image, bottomLeftTriangle, False)
-            upperValue = readDigitsFromImage(origImage, image, upperRightTriangle, False)
+                bottomLeftTriangle = trianglesInCell[1]['contour']
+                upperRightTriangle = trianglesInCell[0]['contour']
+            bottomValue = handleDigitsFromImage(origImage, image, bottomLeftTriangle, False, alon)
+            upperValue = handleDigitsFromImage(origImage, image, upperRightTriangle, False, alon)
             return {
                 'valid': True,
                 'cell': {
                     'cellType': 'triangle',
-                    'value': { 'bottom': bottomValue, 'upper': upperValue }
+                    'value': {
+                        'hasValue': bottomValue['hasValue'] and upperValue['hasValue'],
+                        'bottom': bottomValue,
+                        'upper': upperValue
+                    }
                 }
             }
+
     else:
         return { 'valid': False }
 
-def getGrid(origImage, image):
-    # dilating
-    image = new_dilate(image, 7)
-    # eroding
-    kernel = np.ones((5, 5), np.uint8)
-    image = cv2.erode(image, kernel, iterations=1)
-    # blurring
-    image = cv2.GaussianBlur(image, (7, 7), 15)
+def getDigitsFromImages(mnistCells):
+    images, result = [], []
 
+    for (i, j, cell) in mnistCells:
+
+        if (cell['cellType'] == 'square'):
+            digits = cell['value']
+            result.append({ 'row': i, 'col': j, 'type': 'square', 'value': None })
+            index = len(result) - 1
+            for k in range(0, len(digits)):
+                images.append({ 'image': digits[k], 'index': index })
+
+        elif (cell['cellType'] == 'triangle'):
+            bottom = cell['value']['bottom']
+            if (bottom['hasValue'] == True):
+                result.append({ 'row': i, 'col': j, 'type': 'bottom', 'value': bottom['data'] })
+            else:
+                digits = bottom['data']
+                result.append({ 'row': i, 'col': j, 'type': 'bottom', 'value': None })
+                index = len(result) - 1
+                for k in range(0, len(digits)):
+                    images.append({ 'image': digits[k], 'index': index })
+
+            upper = cell['value']['upper']
+            if (upper['hasValue'] == True):
+                result.append({ 'row': i, 'col': j, 'type': 'upper', 'value': upper['data'] })
+            else:
+                digits = upper['data']
+                result.append({ 'row': i, 'col': j, 'type': 'upper', 'value': None })
+                index = len(result) - 1
+                for k in range(0, len(digits)):
+                    images.append({ 'image' : digits[k], 'index': index })
+
+    #todo: make if faster!
+    onlyDigits = []
+    for item in images:
+        onlyDigits.append(item['image'])
+
+    digitsWithValues = getDigitsFromMNIST(onlyDigits)
+    for i in range(0, len(images)):
+        item = images[i]
+        if (True):
+            u = result[item['index']]
+            str1 = "row:" + str(u['row']) + " col:" + str(u['col']) + " t:" + str(u['type']) + " val:" + str(digitsWithValues[i])
+            #show(item['image'], str1)
+        if (result[item['index']]['value'] == None):
+            result[item['index']]['value'] = digitsWithValues[i]
+        else:
+            # since we sorted the cell's digits from the left to the right
+            result[item['index']]['value'] *= 10
+            result[item['index']]['value'] += digitsWithValues[i]
+
+    return result
+
+def handleSquareCells(origCropedImage, squares, triangles):
+    blockedCells, regularCells = [], []
+    image = convertToGray(origCropedImage.copy())
+
+    if (False):
+        stam = convertToColor(image.copy())
+        stam = cv2.drawContours(stam, squares, -1, (255, 0, 0), 3)
+        show(stam)
+
+    # excluding all lines and other contours which are not cell square
+    nativeSquares = list(filter(lambda x: not containedByOtherContour(x, squares), squares))
+    # getting all squares which doesn't contain triangles
+    nativeSquares = list(filter(lambda x: not containsAnyContour(x, triangles), nativeSquares))
+    if (False):
+        stam = convertToColor(image.copy())
+        stam = cv2.drawContours(stam, nativeSquares, -1, (255, 0, 0), 3)
+        show(stam)
+    # getting all square contours
+    nativeSquares = list(filter(lambda x: not checkIfFarBiggerThanAreaSize(image.shape[0] * image.shape[1], x), nativeSquares))
+
+    ret, thresh = cv2.threshold(image, 170, 255, cv2.THRESH_BINARY)
+    border = 5
+
+    for square in nativeSquares:
+        if (False):
+            stam = convertToColor(image.copy())
+            stam = cv2.drawContours(stam, [square], -1, (255, 0, 0), 3)
+            show(stam)
+
+        x, y, w, h = getRect(square)
+        cell = thresh[y + border:y + h - border,
+                      x + border:x + w - border]
+
+        if percentageOfWhitePixels(cell) > 30:
+            regularCells.append(square)
+        else:
+            blockedCells.append(square)
+
+    return blockedCells, regularCells
+
+def getGrid(image):
+    boardCopy = image.copy()
     # Handling semi cells (triangles)
-    image, triangles = convertSemiCellsToCells(image)
+    image, triangles = convertSemiCellsToCells(boardCopy.copy())
+
+    if (len(triangles) == 0):
+        #print("Invalid board. number of triangles is: " + str(len(triangles) / 2))
+        isSquareBoard = False
+        return isSquareBoard, None, None
+
+    #image = convertToGray(boardCopy)
+    #image = threshPost(image)#threshPostAllSquares(image)
 
     # Handling square cells
-    height, width = image.shape[0], image.shape[1]
-    boardSize = height * width
+    boardSize = image.shape[0] * image.shape[1]
     # getting all square contours
     square_contours = getAllSquares(getAllContours(image))
     # filter the board contour if exists
@@ -372,34 +535,92 @@ def getGrid(origImage, image):
     contourAvgSize = sum(cv2.contourArea(item) for item in square_contours) / float(len(square_contours))
     square_contours = list(filter(lambda x: not checkIfVeryBelowAreaSize(contourAvgSize, x), square_contours))
 
-    print("Number of triangles is: " + str(int(len(triangles) / 2)))
-    kakuroSize = int(math.sqrt(len(square_contours)))
-    if (math.sqrt(len(square_contours)) != kakuroSize):
-        print("Invalid board. number of squares is: " + str(len(square_contours)))
+    if (False):
+        #image = convertToColor(image)
+        image = cv2.drawContours(boardCopy, square_contours, -1, (255, 0, 0), 3)
+        show(image)
+        #image = cv2.drawContours(image, square_contours, -1, (0, 0, 0), 3)
+        #image = convertToGray(image)
+
+    blockedCells, regularCells = handleSquareCells(boardCopy, square_contours, triangles)
+
+    rootSize = math.sqrt(len(blockedCells) + len(regularCells) + (len(triangles) / 2))
+    kakuroSize = int(rootSize)
+    if (rootSize != kakuroSize):
+        #print("Invalid board.")
+        #print("number of regular squares is: " + str(len(regularCells)))
+        #print("number of blocking squares is: " + str(len(blockedCells)))
+        #print("number of triangles is: " + str(len(triangles) / 2))
         isSquareBoard = False
         return isSquareBoard, None, None
     else:
         isSquareBoard = True
-        print("The board is square of " + str(kakuroSize) + "x" + str(kakuroSize))
+        #print("The board is square of " + str(kakuroSize) + "x" + str(kakuroSize))
 
     gridCells = getBoardGrid(kakuroSize, square_contours)
+
+    if gridCells == None:
+        isSquareBoard = False
+        return isSquareBoard, None, None
+
+    mnistCells = []
 
     boardCells = []
     for i in range(0, kakuroSize):
         lineCells = []
 
         for j in range(0, kakuroSize):
-            #print("cell of line:" + str(i+1) + " col:" + str(j+1))
-            #todo: delete i,j
-            result = readCellFromImage(origImage, image, gridCells[i][j], triangles)
-            if (result['valid'] == True):
-                lineCells.append(result['cell'])
-            else:
-                print("Invalid cell on [" + str(i+1) + "][" + str(j+1) + "]")
+            alon = (i,j)
+            result = readCellFromImage(boardCopy, image, gridCells[i][j], (regularCells, blockedCells, triangles), alon)
+
+            if (result['valid'] == False):
+                #print("Invalid cell on [" + str(i + 1) + "][" + str(j + 1) + "]")
                 isSquareBoard = False
                 return isSquareBoard, None, None
+            else:
+                if ('block' in result):
+                    lineCells.append({ 'block': True })
+                else:
+                    cell = result['cell']
+                    if (cell['value']['hasValue'] == True):
+                        lineCells.append({ 'cellType': cell['cellType'], 'value': cell['value'] })
+                    else:
+                        mnistCell = (i, j, cell)
+                        mnistCells.append(mnistCell)
+                        lineCells.append(None)
 
         boardCells.append(lineCells)
+
+    mnistResults = getDigitsFromImages(mnistCells)
+
+    for cell in mnistResults:
+        i, j, cellType, value = cell['row'], cell['col'], cell['type'], cell['value']
+        if (boardCells[i][j] == None):
+            boardCell = {}
+
+            if cellType == 'square':
+                boardCell['cellType'] = 'square'
+                boardCell['value'] = value
+            elif cellType == 'upper':
+                boardCell['cellType'] = 'triangle'
+                boardCell['value'] = { 'upper': { 'data': value } }
+            elif cellType == 'bottom':
+                boardCell['cellType'] = 'triangle'
+                boardCell['value'] = { 'bottom': { 'data': value } }
+
+            boardCells[i][j] = boardCell
+        else:
+            if (cellType == 'square' or
+                (cellType == 'upper' and 'upper' in boardCells[i][j]['value']) or
+                (cellType == 'bottom' and 'bottom' in boardCells[i][j]['value'])):
+                print ('Wrong cell input.')
+                isSquareBoard = False
+                return isSquareBoard, None, None
+            elif (cellType == 'upper'):
+                boardCells[i][j]['value']['upper'] = { 'data': value }
+            elif (cellType == 'bottom'):
+                boardCells[i][j]['value']['bottom'] = { 'data': value }
+
     return isSquareBoard, boardCells, image
 
 def printGrid(grid):
@@ -409,58 +630,105 @@ def printGrid(grid):
         for cell in line:
             cellString = ""
 
-            type = cell['cellType']
-            value = cell['value']
-            if (type == 'square'):
-                if (value == None):
-                    cellString = "      "
-                elif (value < 10):
-                    cellString = "  " + str(value) + "   "
-                else:
-                    cellString = "  " + str(value) + "  "
-            elif (type == 'triangle'):
-                bottomVal = value['bottom']
-                if (bottomVal == None):
-                    bottom = "  "
-                elif (bottomVal < 10):
-                    bottom = " " + str(bottomVal)
-                else:
-                    bottom = str(bottomVal)
-
-                upperVal = value['upper']
-                if (upperVal == None):
-                    upper = "  "
-                elif (upperVal < 10):
-                    upper = " " + str(upperVal)
-                else:
-                    upper = str(upperVal)
-
-                cellString = bottom + ' \\' + upper
+            if ('block' in cell):
+                cellString = "XXXXXX"
             else:
-                return
+                type = cell['cellType']
+                value = cell['value']
+                if (type == 'square'):
+                    value = value['data']
+                    if (value == None):
+                        cellString = "      "
+                    elif (value < 10):
+                        cellString = "  " + str(value) + "   "
+                    else:
+                        cellString = "  " + str(value) + "  "
+                elif (type == 'triangle'):
+                    bottomVal = value['bottom']['data']
+
+                    if (bottomVal == None):
+                        bottom = "  "
+                    elif (bottomVal < 10):
+                        bottom = " " + str(bottomVal)
+                    else:
+                        bottom = str(bottomVal)
+
+                    upperVal = value['upper']['data']
+
+                    if (upperVal == None):
+                        upper = "  "
+                    elif (upperVal < 10):
+                        upper = " " + str(upperVal)
+                    else:
+                        upper = str(upperVal)
+
+                    cellString = bottom + ' \\' + upper
+                else:
+                    return
 
             lineString = lineString + "(" + cellString + ")"
-        print ('—' * 72)
-        print(lineString)
-        print('—' * 72)
 
-def main():
-    # process all 60 of our images
-    for fp in range(1, 8):
-        print("Started at " + str(datetime.now()))
-        infile = "../pics/%d.jpg" % (fp)
-        print("Showing " + infile)
+def convertGridToJson(grid):
+    gridJSON = []
+    for line in grid:
+        lineJSON = []
+
+        for cell in line:
+            if ('block' in cell):
+                lineJSON.append("X")
+                continue
+            else:
+                type = cell['cellType']
+                value = cell['value']
+                if (type == 'square'):
+                    value = value['data']
+                    if (value == None):
+                        lineJSON.append(None)
+                    else:
+                        lineJSON.append(value)
+                    continue
+                elif (type == 'triangle'):
+                    cellJSON = {}
+
+                    bottomVal = value['bottom']['data']
+                    if (bottomVal != None):
+                        cellJSON['down'] = np.asscalar(bottomVal)
+
+
+                    upperVal = value['upper']['data']
+                    if (upperVal != None):
+                        cellJSON['right'] = np.asscalar(upperVal)
+
+                    if (cellJSON != {}):
+                        lineJSON.append(cellJSON)
+                    else:
+                        lineJSON.append(None)
+        gridJSON.append(lineJSON)
+    return gridJSON
+
+def main(filePath):
+    try:
         # Ref(s) for lines 106 to 131
         # http://stackoverflow.com/a/11366549
-        originalImage, boardImage = getBoardFromImage(infile)
-        isSquareBoard, grid, boardImage = getGrid(originalImage, boardImage)
-        print("Finished at " + str(datetime.now()))
+        originalImage = cv2.imread(filePath)
+        boardImage, boardRect = getBoardFromImage(originalImage)
+        if (True):
+            (x, y, w, h) = boardRect
+            origCroped = originalImage[y: y + h, x: x + w]
+        isSquareBoard, grid, boardImage = getGrid(origCroped)
 
         if (isSquareBoard):
-            printGrid(grid)
+            #printGrid(grid)
             # todo: debug
             if (True):
                 minH, maxH, minW, maxW = min(alonH), max(alonH), min(alonW), max(alonW)
-            show(boardImage)
+            show(origCroped)
+        result = convertGridToJson(grid)
+        jsonResult = json.dumps(result, separators=(',', ':'))
+        print(jsonResult)
+        return jsonResult
+    except:
+        return json.dumps({})
 
-main()
+inFile = sys.argv[1]
+main(inFile)

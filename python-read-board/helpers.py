@@ -2,6 +2,9 @@ import cv2
 import numpy as np
 import math
 
+#TODO: delete
+#from imageHelper import show
+
 def getAllContours(image):
     _, contours, h = cv2.findContours(image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     return contours
@@ -15,9 +18,9 @@ def cut_out_sudoku_puzzle(image, contour):
     image = image[y:y + h, x:x + w]
     return make_it_square(image, min(image.shape))
 
-def thresholdify(img):
+def thresholdify(img, kernel=31, value=7):
     img = cv2.adaptiveThreshold(img.astype(np.uint8), 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-                                cv2.THRESH_BINARY, 11,10)#3 #TODO: was 11,10 or 11,7 or 5,2
+                                cv2.THRESH_BINARY, kernel,value)#3 #TODO: was 11,10 or 11,7 or 5,2
     return 255 - img
 
 def dilate(image):
@@ -36,7 +39,7 @@ def dilate(image):
 
 def new_dilate(image, size):
     structure_elem = cv2.getStructuringElement(cv2.MORPH_OPEN, (size, size))
-    dilated = cv2.dilate(image, structure_elem)
+    dilated = cv2.dilate(image, structure_elem, iterations=1)
     return dilated
 
 def approx(cnt):
@@ -130,10 +133,72 @@ def findContourAndRectOfPoint(point, cntsAndRects):
             return (cnt, rect)
     return None
 
+def containsAnyContour(source, list):
+    for dst in list:
+        dstCenter = getContourCenter(dst)
+        if (isPointInContour(dstCenter, source)):
+            return True
+    return False
+
+def containedByOtherContour(source, list):
+    sourceCenter = getContourCenter(source)
+    sourceArea = cv2.contourArea(source)
+    for dst in list:
+        dstArea = cv2.contourArea(dst)
+        if (isPointInContour(sourceCenter, dst) and sourceArea < dstArea):
+            return True
+    return False
+
 def isPointInContour(point, contour):
     r = cv2.pointPolygonTest(contour, point, False)
     # the point is inside the contour
     return (r == 1)
+
+def invertProcess(image):
+    image = cv2.adaptiveThreshold(image.astype(np.uint8), 150, cv2.ADAPTIVE_THRESH_MEAN_C,
+                                   cv2.THRESH_BINARY_INV, 31, 7)  # 3 #TODO: was 11,10 or 11,7 or 5,2
+    image = cv2.GaussianBlur(image, (5, 5), 0)
+    #show(image)
+    return image
+
+def postForTriangles(image):
+    thresh = cv2.adaptiveThreshold(image.astype(np.uint8), 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                                cv2.THRESH_BINARY, 31, 7)  # 3 #TODO: was 11,10 or 11,7 or 5,2
+    image = 255 - thresh
+    image = cv2.GaussianBlur(image, (5, 5), 0)
+    #show(image)
+    return image
+
+    ret, thresh = cv2.threshold(image, 160, 255, cv2.THRESH_BINARY)
+    image = 255 - thresh
+    #image = cv2.GaussianBlur(image, (5, 5), 0)
+    # eroding
+    kernel = np.ones((7, 7), np.uint8)
+    image = cv2.erode(image, kernel, iterations=2)
+    #show(image)
+    image = cv2.GaussianBlur(image, (7, 7), 0)
+    #show(image)
+    return image
+
+def threshPostAllSquares(image):
+    ret, thresh = cv2.threshold(image, 160, 255, cv2.THRESH_BINARY)
+    image = 255 - thresh
+    image = cv2.GaussianBlur(image, (9, 9), 0)
+    # eroding
+    kernel = np.ones((3, 3), np.uint8)
+    image = cv2.erode(image, kernel, iterations=2)
+    return image
+
+def threshPost(image):
+    image = cv2.adaptiveThreshold(image.astype(np.uint8), 160, cv2.ADAPTIVE_THRESH_MEAN_C,
+                                cv2.THRESH_BINARY_INV, 11, 7)  # 3 #TODO: was 11,10 or 11,7 or 5,2
+    #show(image)
+    image = cv2.GaussianBlur(image, (9, 9), 0)
+    #show(image)
+    return image
+    #image = cv2.bilateralFilter(image, 11, 17, 17)
+    #image = cv2.Canny(image, 30, 200)
+    #ret, thresh = cv2.threshold(image, 127, 255, cv2.THRESH_BINARY)
 
 # irrelevant
 def thresholdifyNew(img):
@@ -194,7 +259,7 @@ def warp_perspective(rect, grid):
     return make_it_square(warp)
 
 def straighten(image):
-    print('Straightening image...')
+    #print('Straightening image...')
     largest = largest4SideContour(image.copy())
     if (largest is None):
         return image

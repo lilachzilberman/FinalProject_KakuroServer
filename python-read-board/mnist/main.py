@@ -1,80 +1,25 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
-from sklearn.datasets import fetch_mldata
-import random
 import numpy as np  # in order to save the confusionMatrix into a file
 import math
-import datetime
+#import datetime
 
 # other files
-from mnist.dataHandler import preProcessImage
-from mnist.config import size, epochs, batchSize, trainPercentage, learningRate, BASE_PATH
+from mnist.dataHandler import preProcessImages
+from mnist.config import size, isTraining, epochs, batchSize, trainPercentage, learningRate, BASE_PATH
 
 # Constants
 tensorboardFolder = BASE_PATH + 'tensorBoard'
 confusionsFolder = BASE_PATH + 'confusionMatrix'
 modelFilePath = BASE_PATH + 'model/my-model'
-# for testing final results
-mappingArray = {
-    0: "ALEF",
-    1: "BEIT",
-    2: "GIMEL",
-    3: "DALED",
-    4: "HEY",
-    5: "VAV",
-    6: "ZAIN",
-    7: "CHET",
-    8: "TET",
-    9: "YUD",
-    10: "KAF",
-    11: "LAMED",
-    12: "MEM",
-    13: "NUN",
-    14: "SAMECH",
-    15: "AIYN",
-    16: "PEI",
-    17: "TZADIK",
-    18: "KUF",
-    19: "REISH",
-    20: "SHIN",
-    21: "TAF",
-    22: "NOTHING",
-    23: "KAF SOFIT",
-    24: "MEM SOFIT",
-    25: "NUN SOFIT",
-    26: "PEI SOFIT",
-    27: "TZADIK SOFIT",
-    28: "(",
-    29: ")",
-    30: "+",
-    31: "-",
-    32: "integral",
-    33: "Gadol Shave",
-    34: "Katan Shave",
-    35: "Infinity",
-    36: "Sigma",
-    37: "Hituch",
-    38: "Not equale",
-    39: "Division",
-    40: "Dot",
-    41: "0",
-    42: "1",
-    43: "2",
-    44: "3",
-    45: "4",
-    46: "5",
-    47: "6",
-    48: "7",
-    49: "8",
-    50: "9",
-    51: "ALEF"
-}
 
-def shuffleData(x, y):
-    zipped = list(zip(x, y)) # https://docs.python.org/2/library/functions.html#zip
-    random.shuffle(zipped)
-    x2, y2 = zip(*zipped) # unzipping
-    return x2, y2
+#def shuffleData(x, y):
+#    zipped = list(zip(x, y)) # https://docs.python.org/2/library/functions.html#zip
+#    random.shuffle(zipped) - import random
+#    x2, y2 = zip(*zipped) # unzipping
+#    return x2, y2
 
 def exportToCsv(filePath, data):
     np.savetxt(filePath, data, delimiter=',')
@@ -205,7 +150,8 @@ with tf.name_scope('Output_Layer'):
     y_pred = tf.matmul(layer_8, W_fc3) + b_fc3
     y = tf.placeholder(tf.float32, shape=[None, outputLayerSize])
     # getting entropy for loss function
-    cross_entropy = tf.reduce_sum(
+    #cross_entropy = tf.reduce_sum(
+    cross_entropy = tf.reduce_mean(
         tf.nn.softmax_cross_entropy_with_logits(logits=y_pred, labels=y))
 
     # data for TensorBoard
@@ -237,48 +183,46 @@ with tf.name_scope('Confusion_Matrix'):
     confusionMatrix = tf.contrib.metrics.confusion_matrix(prediction, realLabels)
 # End of creating the net
 
-def run(imageToRead, isTraining=False):
+def run(imagesToRead=None, isTraining=False):
     if (isTraining):
         with tf.name_scope('Init_Session'):
             sess = tf.Session()
+            # sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
             #sess = tf.InteractiveSession()
             sess.run(tf.global_variables_initializer())
 
         # initializing tensorflow summary
-        date = datetime.datetime.now().strftime("%d-%m_%H:%M:%S")
-        print('Started training at:' + date)
-        trainFileName = '{}/lr{}_batch{}_epochs{}_size{}_{}/train'.format(tensorboardFolder, learningRate, batchSize, epochs, size, date)
-        testFileName = '{}/lr{}_batch{}_epochs{}_size{}_{}/test'.format(tensorboardFolder, learningRate, batchSize, epochs, size, date)
-        trainSummary = tf.summary.FileWriter(trainFileName, sess.graph)
-        testSummary = tf.summary.FileWriter(testFileName)
+        #date = datetime.datetime.now().strftime("%d-%m_%H-%M-%S")
+        #print('Started training at:' + date)
+        #trainFileName = '{}/lr{}_batch{}_epochs{}_size{}_{}/train'.format(tensorboardFolder, learningRate, batchSize, epochs, size, date)
+        #testFileName = '{}/lr{}_batch{}_epochs{}_size{}_{}/test'.format(tensorboardFolder, learningRate, batchSize, epochs, size, date)
+        #trainSummary = tf.summary.FileWriter(trainFileName, sess.graph)
+        #testSummary = tf.summary.FileWriter(testFileName)
         allSummeries = tf.summary.merge_all()
 
         mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
         #mnist = fetch_mldata("MNIST original")
-        images, labels = mnist.train.images[:60000], mnist.train.labels[:60000]
-        number_of_examples = len(images)
+        #images, labels = mnist.train.images[:60000], mnist.train.labels[:60000]
+        #number_of_examples = len(images)
         #x = [ex for ex, ey in zip(images, labels)]
         #y = labels
         # x, y = shuffle(x, y, random_state=1)
 
-        trainLength = int(len(images) * trainPercentage)
-        train_x = images[:trainLength]
-        train_y = labels[:trainLength]
-        test_x = images[trainLength:]
-        test_y = labels[trainLength:]
+        #trainLength = int(len(images) * trainPercentage)
+        #train_x = images[:trainLength]
+        #train_y = labels[:trainLength]
+        #test_x = images[trainLength:]
+        #test_y = labels[trainLength:]
         #test_x = mnist.test.images
         #test_y = mnist.test.labels
         # Creating test data sets
 
-        print('Started real training at:' + date)
+        #print('Started real training at:' + date)
 
         for i in range(epochs):
-            #batch = mnist.train.next_batch(batchSize)
-            #batch_x = batch[0]
-            #batch_y = batch[1]
-            batchIndex = ((i + 1) % 20)
-            batch_x = train_x[batchIndex * batchSize: (batchIndex + 1) * batchSize]
-            batch_y = train_y[batchIndex * batchSize: (batchIndex + 1) * batchSize]
+            batch = mnist.train.next_batch(batchSize)
+            batch_x = batch[0]
+            batch_y = batch[1]
 
             # choose example
             #ind = random.randint(0, number_of_examples - 1)
@@ -288,49 +232,49 @@ def run(imageToRead, isTraining=False):
             summary, acc = sess.run([allSummeries, optimizer],
                                     feed_dict={ x: batch_x, y: batch_y, keep_prob: dropoutProbability })
 
-            # Every 20th step, measure accuracy, and write summaries
-            if ((i + 1) % 1 == 0):
-                trainSummary.add_summary(summary, i)
+            # Every 100th step, measure accuracy, and write summaries
+            if (i%100 == 0):
+                #trainSummary.add_summary(summary, i)
 
                 summary, acc, confuse = sess.run([allSummeries, accuracy, confusionMatrix],
-                                        feed_dict={ x: test_x, y: test_y, keep_prob: 1.0})
-                testSummary.add_summary(summary, i)
+                                        feed_dict={ x: batch_x, y: batch_y, keep_prob: 1.0})
+                #testSummary.add_summary(summary, i)
 
                 print('The accuracy on epoch {} is: {}'.format(i + 1, acc))
 
             # Shuffling before next epoch
-            train_x, train_y = shuffleData(train_x, train_y)
+            #train_x, train_y = shuffleData(train_x, train_y)
 
         # Running last time to conclude all results (if the number of images doesn't divide by 20
         summary, acc, confuse = sess.run([allSummeries, accuracy, confusionMatrix],
-                                         feed_dict={ x: test_x, y: test_y, keep_prob: 1.0})
+                                         feed_dict={ x: mnist.test.images, y: mnist.test.labels, keep_prob: 1.0})
         print('The total accuracy for test set is: {}'.format(acc))
 
         # Saving confusion matrix on csv format
         confusionFileName = '{}/lr{}_batch{}_epochs{}_size{}_{}.csv'.format(confusionsFolder, learningRate, batchSize, epochs, size, date)
         exportToCsv(confusionFileName, confuse)
 
-        testSummary.close()
-        trainSummary.close()
+        #testSummary.close()
+        #trainSummary.close()
 
         saveModel(sess)
 
-        date = datetime.datetime.now().strftime("%d-%m_%H:%M:%S")
-        print('Finished training at:' + date)
+        #date = datetime.datetime.now().strftime("%d-%m_%H:%M:%S")
+        #print('Finished training at:' + date)
 
     # not training
     else:
-        imageToRead = preProcessImage(imageToRead, size)
+        imagesToRead = preProcessImages(imagesToRead, size)
 
         sess = tf.Session()
         sess = getModel(sess)
 
         moshe_acc = tf.argmax(y_pred, 1)  # the index of the maximum element
         # Getting predictions for all given images (without dropout since we're not training anymore)
-        finalResults = sess.run(moshe_acc, feed_dict={ x: [imageToRead], keep_prob: 1.0})
+        finalResults = sess.run(moshe_acc, feed_dict={ x: imagesToRead, keep_prob: 1.0})
         #finalResults = [x+1 for x in finalResults]
 
-        return finalResults[0]
+        return finalResults
 
         # Saving results
         #mosheFileName = '{}/moshe.csv'.format(confusionsFolder)
