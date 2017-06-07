@@ -764,32 +764,29 @@ def convertGridToJson(grid):
     return gridJSON
 
 def main(filePath):
-    try:
-        # Ref(s) for lines 106 to 131
-        # http://stackoverflow.com/a/11366549
-        originalImage = cv2.imread(filePath)
-        boardImage, boardRect = getBoardFromImage(originalImage)
-        (x, y, w, h) = boardRect
-        origCroped = originalImage[y: y + h, x: x + w]
-        isSquareBoard, grid, boardImage, jsonOfGrid = getGrid(origCroped)
+    # Ref(s) for lines 106 to 131
+    # http://stackoverflow.com/a/11366549
+    originalImage = cv2.imread(filePath)
+    boardImage, boardRect = getBoardFromImage(originalImage)
+    (x, y, w, h) = boardRect
+    origCroped = originalImage[y: y + h, x: x + w]
+    isSquareBoard, grid, boardImage, jsonOfGrid = getGrid(origCroped)
 
-        result = {}
-        if (isSquareBoard):
-            if (jsonOfGrid != None):
-                result = jsonOfGrid
-            else:
-                #printGrid(grid)
-                # todo: debug
-                if (True):
-                    minH, maxH, minW, maxW = min(alonH), max(alonH), min(alonW), max(alonW)
-                show(origCroped)
-                result = convertGridToJson(grid)
+    result = {}
+    if (isSquareBoard):
+        if (jsonOfGrid != None):
+            result = jsonOfGrid
+        else:
+            #printGrid(grid)
+            # todo: debug
+            if (True):
+                minH, maxH, minW, maxW = min(alonH), max(alonH), min(alonW), max(alonW)
+            show(origCroped)
+            result = convertGridToJson(grid)
 
-        jsonResult = json.dumps(result, separators=(',', ':'))
-        print(jsonResult)
-        return jsonResult
-    except:
-        return json.dumps({})
+    jsonResult = json.dumps(result, separators=(',', ':'))
+    print(jsonResult)
+    return jsonResult
 
 inFile = sys.argv[1]
 main(inFile)
