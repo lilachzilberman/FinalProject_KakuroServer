@@ -2,4 +2,5 @@
 bin
 build
 *.zip
+**/__pycache__
 python-read-board/**/.idea
