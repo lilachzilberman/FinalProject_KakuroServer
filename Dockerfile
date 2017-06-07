@@ -12,3 +12,4 @@ RUN rm -rf $CATALINA_HOME/webapps/ROOT && \
 
 
 ENV KAKURO_PYTHON_MAIN ${PWD}/python-read-board/main.py
+ENV KAKURO_PYTHON_IMAGE_VIA_FILE true
