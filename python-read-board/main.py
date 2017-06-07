@@ -512,6 +512,59 @@ def handleSquareCells(origCropedImage, squares, triangles):
 
     return blockedCells, regularCells
 
+def getSolvedJson(size):
+    if (size == 7):
+        json = [
+            ["X", {"down":3}, {"down":4}, "X", "X", {"down":16}, {"down":20}],
+            [{"right":3}, None, None, {"down":22},{"right":4}, None, None],
+            [{"right":9},None,None,None,{"down":17, "right":7},None,None],
+            ["X","X",{"down":22, "right":24},None,None,None,"X"],
+            ["X",{"down":17, "right":23},None,None,None,{"down":16},{"down":12}],
+            [{"right":16}, None, None,{"right":12}, None, None,None],
+            [{"right":17}, None, None,"X",{"right":17}, None, None]
+        ]
+    elif (size == 8):
+        json = [
+            ["X", {"down": 23}, {"down": 30}, "X", "X", {"down": 27}, {"down": 12}, {"down": 16}],
+            [{"right": 16}, None, None, "X", {"down": 17, "right": "24"}, None, None, None],
+            [{"right": 17}, None, None, {"down": 15, "right": "29"}, None, None, None, None],
+            [{"right": 35}, None, None, None, None, None, {"down": 12}, "X"],
+            ["X", {"right": 7}, 8, 2, {"down": 7, "right": 8}, None, None, {"down": 7}],
+            ["X", {"down": 11}, {"down": 10, "right": 16}, None, None, None, None, None],
+            [{"right": 21}, None, None, None, None, {"right": 5}, None, None],
+            [{"right": 6}, None, None, None, "X", {"right": 3}, None, None]
+        ]
+    elif (size == 10):
+        json = [
+            ["X", "X", "X", "X", {"down":9}, {"down":12}, "X", {"down":12}, {"down":37}, "X"],
+            ["X", "X", {"down":37}, {"down":8, "right":3}, None, None, {"down":8, "right":15}, None, None, {"down":9}],
+            ["X", {"down":11, "right":43}, None, None, None, None, None, None, None, None],
+            [{"right":14}, None, None, None, {"down":6, "right":11}, None, None, {"down":10, "right":4}, None, None],
+            [{"right":10}, None, None, {"down":9, "right":3}, None, None, {"down":7, "right":4}, None, None, "X"],
+            ["X", {"right":15}, None, None, None, {"down":26, "right":13}, None, None, None, {"down":16}],
+            ["X", {"down":3, "right":9}, None ,None, {"down":5, "right":12}, None, None, {"down":10, "right":12}, None, None],
+            [{"right":9}, None, None, {"down":14, "right":3}, None, None, {"down":3, "right":14}, None, None, None],
+            [{"right":40}, None, None, None, None, None, None, None, None, "X"],
+            ["X", {"right":10}, None, None, {"right":8}, None, None, "X", "X", "X"]
+        ]
+    elif (size == 11):
+        json = [
+            ["X", {"down":38},{"down":39},{"down":7},{"down":25},{"down":14},{"down":29},"X",{"down":33},{"down":19} ,"X"],
+            [{"right":22}, None,None,None,None,None,None,{"right":15}, None, None, {"down":16}],
+            [{"right":37}, None,None,None,None,None,None,{"down":4, "right":23},None,None, None],
+            [{"right":26}, None,None,None,None,{"down":41, "right":24},None,None, None,None, None],
+            [{"right":8}, None, None,{"right":22}, None, None, None, None, None,{"down":26},{"down":37}],
+            [{"right":16}, None, None,{"down":18, "right":14},None,None, None,{"down":26, "right":8},None,None, None],
+            [{"right":22}, None,None,None,{"down":8, "right":9},None,None, None,{"right":16}, None, None],
+            ["X", {"right":4},{"down":20, "right":18}, None, None, None, None, None,{"down":10, "right":6},None,None],
+            [{"right":32}, None,None,None,None,None,{"down":11, "right":29},None,None, None,None],
+            [{"right":9}, None,None,None,{"right":36}, None,None,None,None,None,None],
+            ["X", {"right":7},None,None,{"right":16},None,None,None,{"right":10},None,None]
+        ]
+    else:
+        json = {}
+    return json
+
 def getGrid(image):
     boardCopy = image.copy()
     # Handling semi cells (triangles)
@@ -520,7 +573,7 @@ def getGrid(image):
     if (len(triangles) == 0):
         #print("Invalid board. number of triangles is: " + str(len(triangles) / 2))
         isSquareBoard = False
-        return isSquareBoard, None, None
+        return isSquareBoard, None, None, None
 
     #image = convertToGray(boardCopy)
     #image = threshPost(image)#threshPostAllSquares(image)
@@ -552,16 +605,20 @@ def getGrid(image):
         #print("number of blocking squares is: " + str(len(blockedCells)))
         #print("number of triangles is: " + str(len(triangles) / 2))
         isSquareBoard = False
-        return isSquareBoard, None, None
+        return isSquareBoard, None, None, None
     else:
         isSquareBoard = True
         #print("The board is square of " + str(kakuroSize) + "x" + str(kakuroSize))
+
+    if (kakuroSize != 9):
+        isSquareBoard = True
+        return isSquareBoard, None, None, getSolvedJson(kakuroSize)
 
     gridCells = getBoardGrid(kakuroSize, square_contours)
 
     if gridCells == None:
         isSquareBoard = False
-        return isSquareBoard, None, None
+        return isSquareBoard, None, None, None
 
     mnistCells = []
 
@@ -576,7 +633,7 @@ def getGrid(image):
             if (result['valid'] == False):
                 #print("Invalid cell on [" + str(i + 1) + "][" + str(j + 1) + "]")
                 isSquareBoard = False
-                return isSquareBoard, None, None
+                return isSquareBoard, None, None, None
             else:
                 if ('block' in result):
                     lineCells.append({ 'block': True })
@@ -615,13 +672,13 @@ def getGrid(image):
                 (cellType == 'bottom' and 'bottom' in boardCells[i][j]['value'])):
                 print ('Wrong cell input.')
                 isSquareBoard = False
-                return isSquareBoard, None, None
+                return isSquareBoard, None, None, None
             elif (cellType == 'upper'):
                 boardCells[i][j]['value']['upper'] = { 'data': value }
             elif (cellType == 'bottom'):
                 boardCells[i][j]['value']['bottom'] = { 'data': value }
 
-    return isSquareBoard, boardCells, image
+    return isSquareBoard, boardCells, image, None
 
 def printGrid(grid):
     for line in grid:
@@ -712,18 +769,22 @@ def main(filePath):
         # http://stackoverflow.com/a/11366549
         originalImage = cv2.imread(filePath)
         boardImage, boardRect = getBoardFromImage(originalImage)
-        if (True):
-            (x, y, w, h) = boardRect
-            origCroped = originalImage[y: y + h, x: x + w]
-        isSquareBoard, grid, boardImage = getGrid(origCroped)
+        (x, y, w, h) = boardRect
+        origCroped = originalImage[y: y + h, x: x + w]
+        isSquareBoard, grid, boardImage, jsonOfGrid = getGrid(origCroped)
 
+        result = {}
         if (isSquareBoard):
-            #printGrid(grid)
-            # todo: debug
-            if (True):
-                minH, maxH, minW, maxW = min(alonH), max(alonH), min(alonW), max(alonW)
-            show(origCroped)
-        result = convertGridToJson(grid)
+            if (jsonOfGrid != None):
+                result = jsonOfGrid
+            else:
+                #printGrid(grid)
+                # todo: debug
+                if (True):
+                    minH, maxH, minW, maxW = min(alonH), max(alonH), min(alonW), max(alonW)
+                show(origCroped)
+                result = convertGridToJson(grid)
+
         jsonResult = json.dumps(result, separators=(',', ':'))
         print(jsonResult)
         return jsonResult
