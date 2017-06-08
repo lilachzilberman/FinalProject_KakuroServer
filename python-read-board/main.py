@@ -9,21 +9,25 @@ from mnist.main import run as getDigitsFromMNIST
 from mnist.config import size as sizeToMNIST
 from helpers import getAllContours, getContourCenter, isCenterEqual, isPointInContour, calcDistance, cut_out_sudoku_puzzle, thresholdify, dilate, new_dilate, getAllTriangles, getAllSquares
 from helpers import getContourApprox, getMiddleVertex, getRightVertex, getLeftVertex, getTopLeft, getBottomRight, findContourAndRectOfPoint, getRect, threshPost, invertProcess, postForTriangles, threshPostAllSquares
-from helpers import containsAnyContour, containedByOtherContour
+from helpers import containsAnyContour, containedByOtherContour, threshForSquares, postForBlocked, threshForBlock
 
-from imageHelper import show, drawLine, convertToGray, convertToColor, putDigitInCenter, getColorProps, percentageOfWhitePixels
+from imageHelper import show, drawLine, convertToGray, convertToColor, putDigitInCenter, getColorProps, percentageOfWhitePixels, getColorProps2
 SAFETY_PIXEL_WIDTH = 3
 
 def preProcess(image):
+    #show(image)
     #TODO: delete this line
     image = convertToGray(image)
+    #show(image)
 
     #image = dilate(image)
     #show(image)
 
     image = thresholdify(image)
     #show(image)
+    #show(image)
     image = cv2.GaussianBlur(image, (7, 7), 0)
+    #show(image)
     #show(image)
     #kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2)) #TODO: was 2,2
     #image = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
@@ -62,6 +66,10 @@ def getBoardFromImage(orig):
 def checkIfFarBiggerThanAreaSize(size, contour):
     # If the contour is bigger than 50% of the board
     return (cv2.contourArea(contour) > (size / 2))
+
+def areaBiggerThan(size, contour):
+    # If the contour is bigger than 50% of the board
+    return (cv2.contourArea(contour) > size)
 
 def checkIfVeryBelowAreaSize(areaSize, contour):
     # If the contour is smaller than 60% of the average size
@@ -123,35 +131,15 @@ def drawSquare(image, topLeft, topRight, bottomRight, bottomLeft):
     image = convertToGray(image)
     return image
 
-def convertSemiCellsToCells(image):
-    image = convertToGray(image)
-    image = postForTriangles(image)
-    #TODO: no converting to color
-    if (False):
-        stam = getAllSquares(getAllContours(image))
-        image = convertToColor(image)
-        image = cv2.drawContours(image, stam, -1, (0, 255, 0), 5)
-        show(image)
-
-    # getting all triangle contours
-    triangle_contours = getAllTriangles(getAllContours(image))
-
-    if (len(triangle_contours) == 0):
-        return image, triangle_contours
-    # filter contours very below the average (noise contour)
-    contourAvgSize = sum(cv2.contourArea(item) for item in triangle_contours) / float(len(triangle_contours))
-    triangle_contours = list(filter(lambda x: not checkIfVeryBelowAreaSize(contourAvgSize, x), triangle_contours))
-
-    # todo: delete
-    if (False):
-        image = convertToColor(image)
-        image = cv2.drawContours(image, triangle_contours, -1, (0, 255, 0), 5)
-        show(image)
-        image = cv2.drawContours(image, triangle_contours, -1, (0, 0, 0), 5)
-        image = convertToGray(image)
-
+def drawSquaresOnTriangleCells(image, triangle_contours):
     # Converting the triangle contours into squares
     for cnt in triangle_contours:
+        # todo: delete
+        if (False):
+            simage = convertToColor(image)
+            simage = cv2.drawContours(simage, [cnt], -1, (0, 255, 0), 5)
+            show(simage)
+
         # curr vars
         cX, cY = getContourCenter(cnt)
         approx = getContourApprox(cnt)
@@ -181,8 +169,52 @@ def convertSemiCellsToCells(image):
             # lower
             # else:
             # cv2.circle(image, (middleVertex[0][0], middleVertex[0][1]), 20, (255, 255, 0), -1)
+            # Handling square cells
 
-    return image, triangle_contours
+    boardSize = image.shape[0] * image.shape[1]
+    # getting all square contours
+    square_contours = getAllSquares(getAllContours(image))
+    square_contours = list(filter(lambda x: containsAnyContour(x, triangle_contours), square_contours))
+    # filter the board contour if exists
+    square_contours = list(filter(lambda x: not checkIfFarBiggerThanAreaSize(boardSize, x), square_contours))
+    # filter contours very below the average (noise contour)
+    contourAvgSize = sum(cv2.contourArea(item) for item in square_contours) / float(len(square_contours))
+    square_contours = list(filter(lambda x: not checkIfVeryBelowAreaSize(contourAvgSize, x), square_contours))
+    return square_contours
+
+def convertSemiCellsToCells(image):
+    image = convertToGray(image)
+    #show(image)
+    image = postForTriangles(image)
+    #show(image)
+    #TODO: no converting to color
+    if (False):
+        stam1 = getAllSquares(getAllContours(image))
+        stam = convertToColor(image)
+        stam = cv2.drawContours(stam, stam1, -1, (0, 255, 0), 5)
+        show(stam)
+
+    # getting all triangle contours
+    triangle_contours = getAllTriangles(getAllContours(image))
+
+    if (False):
+        stam = convertToColor(image)
+        stam = cv2.drawContours(stam, triangle_contours, -1, (0, 255, 0), 5)
+        show(stam)
+
+    if (len(triangle_contours) == 0):
+        return image, triangle_contours
+    # filter contours very below the average (noise contour)
+    contourAvgSize = sum(cv2.contourArea(item) for item in triangle_contours) / float(len(triangle_contours))
+    triangle_contours = list(filter(lambda x: not checkIfVeryBelowAreaSize(contourAvgSize, x), triangle_contours))
+
+    if (False):
+        simage = convertToColor(image)
+        simage = cv2.drawContours(simage, triangle_contours, -1, (0, 255, 0), 5)
+        show(simage)
+
+    onlyTriangleSquares = drawSquaresOnTriangleCells(image, triangle_contours)
+    return onlyTriangleSquares, triangle_contours
 
 def getBoardGrid(boardSize, cnts):
     # initialize the reverse flag and sort index
@@ -360,8 +392,16 @@ def readCellFromImage(origImage, image, cell, allCells, alon):
     (regularCells, blockCells, triangles) = allCells
     (contour, rect) = cell
 
+    if (False):
+        simage = cv2.drawContours(origImage, [contour], -1, (0, 255, 0), 5)
+        show(simage)
+
     trianglesInCell = []
     for triangle in triangles:
+        if (False):
+            simage = cv2.drawContours(origImage, [triangle], -1, (0, 255, 0), 5)
+            show(simage)
+
         triangleCenter = getContourCenter(triangle)
         if (isPointInContour(triangleCenter, contour)):
             trianglesInCell.append({ 'contour': triangle, 'center': triangleCenter })
@@ -565,10 +605,27 @@ def getSolvedJson(size):
         json = {}
     return json
 
-def getGrid(image):
+def getAverageColorOfContours(image, cnts):
+    backgroundColors = []
+    for contour in cnts:
+        (min, max, avg) = getColorProps(image, contour)
+        backgroundColors.append(max)
+    backgroundColor = np.amin(backgroundColors, axis=0)
+    return backgroundColor
+
+def colorCellsInColor(image, contours, color):
+    return cv2.drawContours(image, contours, -1, color, -1)
+
+
+def getGrid(image, mode):
     boardCopy = image.copy()
     # Handling semi cells (triangles)
-    image, triangles = convertSemiCellsToCells(boardCopy.copy())
+    triangles, trianglesDivided = convertSemiCellsToCells(boardCopy.copy())
+
+    if (False):
+        # image = convertToColor(image)
+        ssimage = cv2.drawContours(boardCopy, triangles, -1, (255, 0, 0), 3)
+        show(ssimage)
 
     if (len(triangles) == 0):
         #print("Invalid board. number of triangles is: " + str(len(triangles) / 2))
@@ -577,27 +634,46 @@ def getGrid(image):
 
     #image = convertToGray(boardCopy)
     #image = threshPost(image)#threshPostAllSquares(image)
-
+    image = postForTriangles(convertToGray(image))
+    #show(image)
     # Handling square cells
     boardSize = image.shape[0] * image.shape[1]
     # getting all square contours
     square_contours = getAllSquares(getAllContours(image))
     # filter the board contour if exists
     square_contours = list(filter(lambda x: not checkIfFarBiggerThanAreaSize(boardSize, x) , square_contours))
+    square_contours = list(filter(lambda x: areaBiggerThan(20 * 20, x), square_contours))
     # filter contours very below the average (noise contour)
     contourAvgSize = sum(cv2.contourArea(item) for item in square_contours) / float(len(square_contours))
-    square_contours = list(filter(lambda x: not checkIfVeryBelowAreaSize(contourAvgSize, x), square_contours))
+    regularCells = list(filter(lambda x: not checkIfVeryBelowAreaSize(contourAvgSize, x), square_contours))
 
     if (False):
-        #image = convertToColor(image)
-        image = cv2.drawContours(boardCopy, square_contours, -1, (255, 0, 0), 3)
-        show(image)
-        #image = cv2.drawContours(image, square_contours, -1, (0, 0, 0), 3)
-        #image = convertToGray(image)
+        # image = convertToColor(image)
+        ssimage = cv2.drawContours(boardCopy, regularCells, -1, (255, 0, 0), 3)
+        show(ssimage)
 
-    blockedCells, regularCells = handleSquareCells(boardCopy, square_contours, triangles)
+    image = postForBlocked(convertToGray(boardCopy), 90, mode)
+    #show(image)
+    # getting all square contours
+    blockedCells = getAllSquares(getAllContours(image))
+    if (False):
+        stam = cv2.drawContours(boardCopy, blockedCells, -1, (0, 255, 0), 5)
+        show(stam)
+    # filter the board contour if exists
+    blockedCells = list(filter(lambda x: not checkIfFarBiggerThanAreaSize(boardSize, x), blockedCells))
+    # filter contours very below the average (noise contour)
+    contourAvgSize = sum(cv2.contourArea(item) for item in blockedCells) / float(len(blockedCells))
+    blockedCells = list(filter(lambda x: not checkIfVeryBelowAreaSize(contourAvgSize, x), blockedCells))
+    # excluding other squares
+    blockedCells = list(filter(lambda x: not containsAnyContour(x, regularCells), blockedCells))
 
-    rootSize = math.sqrt(len(blockedCells) + len(regularCells) + (len(triangles) / 2))
+    if (False):
+        stam = cv2.drawContours(boardCopy, blockedCells, -1, (0, 255, 0), 5)
+        show(stam)
+
+    allCells = blockedCells + regularCells + triangles
+
+    rootSize = math.sqrt(len(allCells))
     kakuroSize = int(rootSize)
     if (rootSize != kakuroSize):
         #print("Invalid board.")
@@ -614,7 +690,7 @@ def getGrid(image):
         isSquareBoard = True
         return isSquareBoard, None, None, getSolvedJson(kakuroSize)
 
-    gridCells = getBoardGrid(kakuroSize, square_contours)
+    gridCells = getBoardGrid(kakuroSize, allCells)
 
     if gridCells == None:
         isSquareBoard = False
@@ -628,7 +704,7 @@ def getGrid(image):
 
         for j in range(0, kakuroSize):
             alon = (i,j)
-            result = readCellFromImage(boardCopy, image, gridCells[i][j], (regularCells, blockedCells, triangles), alon)
+            result = readCellFromImage(boardCopy, image, gridCells[i][j], (regularCells, blockedCells, trianglesDivided), alon)
 
             if (result['valid'] == False):
                 #print("Invalid cell on [" + str(i + 1) + "][" + str(j + 1) + "]")
@@ -724,6 +800,7 @@ def printGrid(grid):
                     return
 
             lineString = lineString + "(" + cellString + ")"
+        #print(lineString)
 
 def convertGridToJson(grid):
     gridJSON = []
@@ -764,29 +841,52 @@ def convertGridToJson(grid):
     return gridJSON
 
 def main(filePath):
-    # Ref(s) for lines 106 to 131
-    # http://stackoverflow.com/a/11366549
-    originalImage = cv2.imread(filePath)
-    boardImage, boardRect = getBoardFromImage(originalImage)
-    (x, y, w, h) = boardRect
-    origCroped = originalImage[y: y + h, x: x + w]
-    isSquareBoard, grid, boardImage, jsonOfGrid = getGrid(origCroped)
+        # Ref(s) for lines 106 to 131
+        # http://stackoverflow.com/a/11366549
+        originalImage = cv2.imread(filePath)
+        boardImage, boardRect = getBoardFromImage(originalImage)
+        (x, y, w, h) = boardRect
+        origCroped = originalImage[y: y + h, x: x + w]
+        #show(origCroped)
+        for mode in range(1, 3):
+            isSquareBoard, grid, boardImage, jsonOfGrid = getGrid(origCroped, mode)
+            if (isSquareBoard):
+                break
 
-    result = {}
-    if (isSquareBoard):
-        if (jsonOfGrid != None):
-            result = jsonOfGrid
-        else:
-            #printGrid(grid)
-            # todo: debug
-            if (True):
-                minH, maxH, minW, maxW = min(alonH), max(alonH), min(alonW), max(alonW)
-            show(origCroped)
-            result = convertGridToJson(grid)
 
-    jsonResult = json.dumps(result, separators=(',', ':'))
-    print(jsonResult)
-    return jsonResult
+        result = {}
+        if (isSquareBoard):
+            if (jsonOfGrid != None):
+                result = jsonOfGrid
+            else:
+                #printGrid(grid)
+                # todo: debug
+                if (True):
+                    minH, maxH, minW, maxW = min(alonH), max(alonH), min(alonW), max(alonW)
+                #show(origCroped)
+                result = convertGridToJson(grid)
+
+        jsonResult = json.dumps(result, separators=(',', ':'))
+        print(jsonResult)
+        return jsonResult
 
 inFile = sys.argv[1]
+#inFile = '/home/alon/PycharmProjects/pics_new/11.jpg'
 main(inFile)
+
+
+#from flask import Flask, request
+#app = Flask(__name__)
+
+#@app.route("/")
+#def hello():
+#    inFile = '/home/alon/PycharmProjects/pics_new/8.jpg'
+#    return main(inFile)
+
+#@app.route("/image", methods=["POST"])
+#def home():
+#    inFile = request.form['name']
+#    return main(inFile)
+
+#if __name__ == "__main__":
+#    app.run()

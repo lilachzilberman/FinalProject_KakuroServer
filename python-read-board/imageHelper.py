@@ -4,7 +4,7 @@ import cv2
 #import matplotlib.pyplot as plt
 import numpy as np
 
-from helpers import getRect
+from helpers import getRect, isPointInContour
 
 def convertToGray(image):
     return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -21,14 +21,26 @@ def putText(image, point, text):
     return
 
 def show(image, title=None):
-    #show image
+    #   show image   #
     #_=pl.axis("off")
     #if (title != None):
-        #_=pl.title(title)
+    #    _=pl.title(title)
     #_ = pl.imshow(image, cmap=pl.gray())
     #plt.show()
-    a=5
     return
+
+def getColorProps2(image):
+    image1 = image.flatten()
+    pixels = [image1[i] for i in range(image1.shape[0]) if image1[i] != 255]
+    avg = np.average(pixels, axis=0)
+    min = np.amin(pixels, axis=0)
+    max = np.amax(pixels, axis=0)
+
+    ret, thresh = cv2.threshold(image, avg, 255, cv2.THRESH_BINARY)
+    image = 255 - thresh
+    show(image)
+
+    return (min, max, avg)
 
 def getColorProps(image, contour):
     #mask = np.zeros(image.shape, np.uint8)

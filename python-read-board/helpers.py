@@ -2,9 +2,6 @@ import cv2
 import numpy as np
 import math
 
-#TODO: delete
-#from imageHelper import show
-
 def getAllContours(image):
     _, contours, h = cv2.findContours(image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     return contours
@@ -161,10 +158,25 @@ def invertProcess(image):
     #show(image)
     return image
 
-def postForTriangles(image):
-    thresh = cv2.adaptiveThreshold(image.astype(np.uint8), 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-                                cv2.THRESH_BINARY, 31, 7)  # 3 #TODO: was 11,10 or 11,7 or 5,2
+def threshForSquares(image):
+    ret, thresh = cv2.threshold(image, 70, 255, cv2.THRESH_BINARY)
     image = 255 - thresh
+    return image
+
+def postForBlocked(image, color, mode):
+    ret, thresh = cv2.threshold(image, color, 255, cv2.THRESH_BINARY)
+    image = 255 - thresh
+    image = cv2.bilateralFilter(image, 9, 75, 75)
+    if (mode == 1):
+        image = cv2.GaussianBlur(image, (5, 5), 0)
+    return image
+
+def postForTriangles(image):
+    ret, thresh = cv2.threshold(image, 120, 255, cv2.THRESH_BINARY)
+    image = 255 - thresh
+    #thresh = cv2.adaptiveThreshold(image.astype(np.uint8), 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+#                                cv2.THRESH_BINARY, 31, 2)  # 3 #TODO: was 11,10 or 11,7 or 5,2
+#    image = 255 - thresh
     image = cv2.GaussianBlur(image, (5, 5), 0)
     #show(image)
     return image
@@ -188,6 +200,13 @@ def threshPostAllSquares(image):
     kernel = np.ones((3, 3), np.uint8)
     image = cv2.erode(image, kernel, iterations=2)
     return image
+
+def threshForBlock(image):
+    image = cv2.adaptiveThreshold(image.astype(np.uint8), 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                                  cv2.THRESH_BINARY, 5, 1)  # 3 #TODO: was 11,10 or 11,7 or 5,2
+    return image
+    #ret, thresh = cv2.threshold(image, 30, 255, cv2.THRESH_BINARY_INV)
+    #return 255 - thresh
 
 def threshPost(image):
     image = cv2.adaptiveThreshold(image.astype(np.uint8), 160, cv2.ADAPTIVE_THRESH_MEAN_C,

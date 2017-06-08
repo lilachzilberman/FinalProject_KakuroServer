@@ -1,2 +1,2 @@
-model_checkpoint_path: "/home/alon/PycharmProjects/finalProject/model/my-model"
-all_model_checkpoint_paths: "/home/alon/PycharmProjects/finalProject/model/my-model"
+model_checkpoint_path: "C:\\git\\mnist app\\app\\model/my-model"
+all_model_checkpoint_paths: "C:\\git\\mnist app\\app\\model/my-model"
