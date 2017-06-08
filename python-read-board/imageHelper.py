@@ -38,7 +38,7 @@ def getColorProps2(image):
 
     ret, thresh = cv2.threshold(image, avg, 255, cv2.THRESH_BINARY)
     image = 255 - thresh
-    show(image)
+    #show(image)
 
     return (min, max, avg)
 
